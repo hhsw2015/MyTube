@@ -1,7 +1,10 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { Response } from "express";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
+import { DATA_DIR } from "../config/paths";
 import { logger } from "../utils/logger";
 
 /**
@@ -58,12 +61,66 @@ interface AuthSession {
 
 const authSessions = new Map<string, AuthSession>();
 
+/**
+ * Opaque session ids live in an in-memory Map, so a process restart (or a VM
+ * recycle) would log everyone out. Persist the Map to disk on every mutation and
+ * reload it on boot so logins survive restarts. The store holds bearer session
+ * ids, so it MUST live outside any web-served directory: default to DATA_DIR
+ * (never served), overridable via MYTUBE_SESSION_STORE to point at a volume that
+ * survives recycles (e.g. a persistent mount) when DATA_DIR itself does not.
+ */
+const SESSION_STORE_PATH = process.env.MYTUBE_SESSION_STORE
+  ? path.resolve(process.env.MYTUBE_SESSION_STORE)
+  : path.join(DATA_DIR, "sessions.json");
+
+function persistSessions(): void {
+  try {
+    fs.mkdirSync(path.dirname(SESSION_STORE_PATH), { recursive: true });
+    const tmp = `${SESSION_STORE_PATH}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify([...authSessions.entries()]), {
+      mode: 0o600,
+    });
+    fs.renameSync(tmp, SESSION_STORE_PATH); // atomic replace
+  } catch (error) {
+    logger.warn(
+      "Failed to persist auth sessions",
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+function loadSessions(): void {
+  try {
+    const entries = JSON.parse(
+      fs.readFileSync(SESSION_STORE_PATH, "utf8")
+    ) as [string, AuthSession][];
+    const now = Date.now();
+    for (const [sessionId, session] of entries) {
+      if (session?.expiresAt > now) {
+        authSessions.set(sessionId, session);
+      }
+    }
+    if (authSessions.size > 0) {
+      logger.info(`Restored ${authSessions.size} auth session(s) from disk`);
+    }
+  } catch {
+    // No store yet / unreadable / corrupt: start with an empty session map.
+  }
+}
+
+loadSessions();
+
 function pruneExpiredSessions(): void {
   const now = Date.now();
+  let removed = 0;
   for (const [sessionId, session] of authSessions.entries()) {
     if (session.expiresAt <= now) {
       authSessions.delete(sessionId);
+      removed += 1;
     }
+  }
+  if (removed > 0) {
+    persistSessions();
   }
 }
 
@@ -74,6 +131,7 @@ function createSession(payload: UserPayload): string {
     payload,
     expiresAt: Date.now() + SESSION_MAX_AGE_MS,
   });
+  persistSessions();
   return sessionId;
 }
 
@@ -130,7 +188,9 @@ export const deleteSession = (sessionId: string): void => {
     return;
   }
 
-  authSessions.delete(sessionId);
+  if (authSessions.delete(sessionId)) {
+    persistSessions();
+  }
 };
 
 export const revokeSessionsByUserId = (userId: string): number => {
@@ -143,6 +203,10 @@ export const revokeSessionsByUserId = (userId: string): number => {
     }
   }
 
+  if (revoked > 0) {
+    persistSessions();
+  }
+
   return revoked;
 };
 
@@ -150,10 +214,15 @@ export const updateSessionUsernames = (
   userId: string,
   username: string
 ): void => {
+  let changed = false;
   for (const session of authSessions.values()) {
     if (session.payload.userId === userId) {
       session.payload.username = username;
+      changed = true;
     }
+  }
+  if (changed) {
+    persistSessions();
   }
 };
 
