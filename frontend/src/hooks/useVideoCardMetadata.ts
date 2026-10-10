@@ -30,6 +30,19 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
             return videoUrl;
         }
 
+        // Torrent (stream proxy) and mount videos resolve to same-origin API
+        // endpoints keyed by video id. The backend exposes these as signedUrl on
+        // the detail endpoint, but list/card payloads omit it — so build the path
+        // from the id (mirrors the backend's signedUrl mapping). Without this the
+        // raw "torrent:<hash>/<file>" (or "mount:") scheme was handed out verbatim
+        // as a bogus, unplayable URL (e.g. copy-link / external player).
+        if (video.videoPath?.startsWith('torrent:')) {
+            return `${window.location.origin}/api/torrent-stream/${video.id}`;
+        }
+        if (video.videoPath?.startsWith('mount:')) {
+            return `${window.location.origin}/api/mount-video/${video.id}`;
+        }
+
         // If cloud storage path but URL not loaded yet, wait for it
         if (video.videoPath?.startsWith('cloud:')) {
             // Try to get the signed URL directly

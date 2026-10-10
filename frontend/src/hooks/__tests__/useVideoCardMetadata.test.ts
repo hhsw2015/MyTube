@@ -113,6 +113,29 @@ describe('useVideoCardMetadata', () => {
         await expect(result.current.getVideoUrl()).resolves.toBe(`${window.location.origin}/videos/local.mp4`);
     });
 
+    it('resolves a torrent video to the same-origin stream proxy keyed by id (not the raw scheme)', async () => {
+        const mockVideo = {
+            id: '66dace9b',
+            source: 'torrent',
+            videoPath: 'torrent:465e0e056a4eb02893f0b4d2202329c917580793/5'
+        };
+        const { result } = renderHook(() => useVideoCardMetadata({ video: mockVideo as any }));
+        await expect(result.current.getVideoUrl()).resolves.toBe(
+            `${window.location.origin}/api/torrent-stream/66dace9b`
+        );
+    });
+
+    it('resolves a mount video to the mount-video endpoint keyed by id', async () => {
+        const mockVideo = {
+            id: 'm1',
+            videoPath: 'mount:Movies/film.mkv'
+        };
+        const { result } = renderHook(() => useVideoCardMetadata({ video: mockVideo as any }));
+        await expect(result.current.getVideoUrl()).resolves.toBe(
+            `${window.location.origin}/api/mount-video/m1`
+        );
+    });
+
     it('preserves a mixed-case remote URL if the hook has not resolved one', async () => {
         const remote = 'HTTPS://cdn.example/video.mp4?token=AbC';
         const { result } = renderHook(() => useVideoCardMetadata({
