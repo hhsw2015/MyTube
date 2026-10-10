@@ -4,10 +4,11 @@ import React from 'react';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { useCloudStorageUrl } from '../../../hooks/useCloudStorageUrl';
+import { useSettings } from '../../../hooks/useSettings';
 import { Collection, Video } from '../../../types';
 
 import { getBackendUrl } from '../../../utils/apiUrl';
-import { encodeLocalMediaPath, isHttpUrl } from '../../../utils/localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl } from '../../../utils/localMediaPath';
 
 const BACKEND_URL = getBackendUrl();
 
@@ -31,11 +32,17 @@ const VideoMetadata: React.FC<VideoMetadataProps> = ({
         video.videoPath,
         video.mediaType === 'audio' ? 'audio' : 'video',
     );
-    const downloadUrl = videoUrl ?? (video.videoPath
-        ? isHttpUrl(video.videoPath)
-            ? video.videoPath
-            : `${BACKEND_URL}${encodeLocalMediaPath(video.videoPath)}`
-        : undefined);
+    const { data: settings } = useSettings();
+    // Torrent/mount videos stream through auth-gated proxies; embed the API key
+    // so the copied link plays outside the authenticated browser session.
+    const apiKey = settings?.apiKeyEnabled ? settings?.apiKey : undefined;
+    const downloadUrl =
+        resolveProxyMediaUrl(video, window.location.origin, apiKey) ??
+        videoUrl ?? (video.videoPath
+            ? isHttpUrl(video.videoPath)
+                ? video.videoPath
+                : `${BACKEND_URL}${encodeLocalMediaPath(video.videoPath)}`
+            : undefined);
 
     const fallbackCopy = (text: string): boolean => {
         const textArea = document.createElement('textarea');

@@ -22,3 +22,28 @@ export const withApiKey = (url: string, apiKey?: string | null): string => {
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}apiKey=${encodeURIComponent(apiKey)}`;
 };
+
+/**
+ * Torrent (`torrent:`) and mount (`mount:`) videos don't live at a servable
+ * path — they stream through auth-gated proxy endpoints keyed by the video id.
+ * Resolve those to the proxy URL, with the API key appended so the link plays
+ * outside the authenticated browser session (copy-link, external/enhanced
+ * player). Returns null for any other scheme so callers keep their normal logic.
+ *
+ * Single source of truth: every place that turns a video into a playable URL
+ * must route through this, otherwise the raw `torrent:<hash>/<file>` string gets
+ * handed out as a bogus URL (the copy-link / download / "open in player" bug).
+ */
+export const resolveProxyMediaUrl = (
+    video: { id: string; videoPath?: string | null },
+    origin: string,
+    apiKey?: string | null
+): string | null => {
+    if (video.videoPath?.startsWith('torrent:')) {
+        return withApiKey(`${origin}/api/torrent-stream/${video.id}`, apiKey);
+    }
+    if (video.videoPath?.startsWith('mount:')) {
+        return withApiKey(`${origin}/api/mount-video/${video.id}`, apiKey);
+    }
+    return null;
+};

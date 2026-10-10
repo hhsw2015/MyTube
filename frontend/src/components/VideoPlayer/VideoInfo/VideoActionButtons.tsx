@@ -6,7 +6,8 @@ import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { useVideo } from '../../../contexts/VideoContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCloudStorageUrl } from '../../../hooks/useCloudStorageUrl';
-import { encodeLocalMediaPath, isHttpUrl } from '../../../utils/localMediaPath';
+import { useSettings } from '../../../hooks/useSettings';
+import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl } from '../../../utils/localMediaPath';
 import { useShareVideo } from '../../../hooks/useShareVideo';
 import { Video } from '../../../types'; // Add imports
 import { getAvailablePlayers, getPlayerUrl } from '../../../utils/playerUtils'; // Import new utils
@@ -45,12 +46,22 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
     const [playerMenuAnchor, setPlayerMenuAnchor] = useState<null | HTMLElement>(null);
     const mediaType = video.mediaType === 'audio' ? 'audio' : 'video';
     const videoUrl = useCloudStorageUrl(video.videoPath, mediaType);
+    const { data: settings } = useSettings();
+    // Torrent/mount videos stream via auth-gated proxies; embed the API key so
+    // the copied / external-player URL works outside the browser session.
+    const apiKey = settings?.apiKeyEnabled ? settings?.apiKey : undefined;
     const isLocked = video.autoDeleteLocked === 1;
 
     const getVideoUrl = async (): Promise<string> => {
         // If we have a cloud storage URL, use it directly
         if (videoUrl) {
             return videoUrl;
+        }
+
+        // Torrent/mount stream through auth-gated proxy endpoints keyed by id.
+        const proxied = resolveProxyMediaUrl(video, window.location.origin, apiKey);
+        if (proxied) {
+            return proxied;
         }
 
         // If cloud storage path but URL not loaded yet, try to get it directly
@@ -88,6 +99,9 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
 
     const getSyncVideoUrl = (): string | null => {
         if (videoUrl) return videoUrl;
+
+        const proxied = resolveProxyMediaUrl(video, window.location.origin, apiKey);
+        if (proxied) return proxied;
 
         if (video.videoPath && !video.videoPath.startsWith('cloud:')) {
             if (isHttpUrl(video.videoPath)) return video.videoPath;

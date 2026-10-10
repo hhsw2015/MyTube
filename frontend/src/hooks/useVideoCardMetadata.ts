@@ -4,7 +4,7 @@ import { isNewVideo } from '../utils/videoCardUtils';
 import { useCloudStorageUrl } from './useCloudStorageUrl';
 import { useSettings } from './useSettings';
 import { useThumbnailCandidates } from './useThumbnailCandidates';
-import { encodeLocalMediaPath, isHttpUrl, withApiKey } from '../utils/localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl } from '../utils/localMediaPath';
 
 interface UseVideoCardMetadataProps {
     video: Video;
@@ -43,11 +43,9 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
         // from the id (mirrors the backend's signedUrl mapping). Without this the
         // raw "torrent:<hash>/<file>" (or "mount:") scheme was handed out verbatim
         // as a bogus, unplayable URL (e.g. copy-link / external player).
-        if (video.videoPath?.startsWith('torrent:')) {
-            return withApiKey(`${window.location.origin}/api/torrent-stream/${video.id}`, apiKey);
-        }
-        if (video.videoPath?.startsWith('mount:')) {
-            return withApiKey(`${window.location.origin}/api/mount-video/${video.id}`, apiKey);
+        const proxied = resolveProxyMediaUrl(video, window.location.origin, apiKey);
+        if (proxied) {
+            return proxied;
         }
 
         // If cloud storage path but URL not loaded yet, wait for it
