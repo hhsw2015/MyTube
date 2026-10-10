@@ -15,7 +15,7 @@ import { buildTorrentVideoPath } from "./torrentPath";
 // A fresh magnet needs time to resolve its file list from the swarm; TorrServer
 // returns an empty list until metadata arrives. Poll getTorrent until files
 // appear (or timeout) so the first add succeeds instead of erroring.
-const TORRENT_METADATA_TIMEOUT_MS = 120000;
+const TORRENT_METADATA_TIMEOUT_MS = 180000;
 const TORRENT_METADATA_POLL_MS = 2000;
 
 async function waitForTorrentFiles(hash: string): Promise<TorrServerTorrent> {

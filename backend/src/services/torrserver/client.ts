@@ -129,6 +129,24 @@ export async function addMagnet(
  * startup and on every add. Big RAM cache + high read-ahead + many connections
  * + a large public tracker list = max download bandwidth and smooth playback.
  */
+// A curated set of reliable public trackers applied immediately (DefaultTrackers
+// is static, unlike TrackersListURL which TorrServer fetches asynchronously).
+// On a cold boot this gives every torrent good trackers right away, which helps
+// metadata resolution in a peer-starved environment where every extra reachable
+// peer counts.
+const DEFAULT_TRACKERS = [
+  "udp://tracker.opentrackr.org:1337/announce",
+  "udp://open.tracker.cl:1337/announce",
+  "udp://open.demonii.com:1337/announce",
+  "udp://tracker.openbittorrent.com:6969/announce",
+  "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.torrent.eu.org:451/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://explodie.org:6969/announce",
+  "udp://tracker.0x7c0.com:6969/announce",
+  "http://tracker.openbittorrent.com:80/announce",
+].join("\n");
+
 const STREAMING_SETTINGS = {
   CacheSize: 1073741824, // 1 GB RAM cache (TorrServer default is 64 MB)
   ReaderReadAHead: 95, // keep downloading far ahead of the playhead
@@ -139,6 +157,7 @@ const STREAMING_SETTINGS = {
   RetrackersMode: 1, // append the tracker list to every torrent
   TrackersListURL:
     "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_all.txt",
+  DefaultTrackers: DEFAULT_TRACKERS,
   TorrentDisconnectTimeout: 120,
   UseDisk: false,
 } as const;
