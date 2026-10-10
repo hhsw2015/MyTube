@@ -26,6 +26,7 @@ import { registerSpaFallback, registerStaticRoutes } from "./server/staticRoutes
 import { startBackgroundJobs } from "./server/startupJobs";
 import { registerLiveTranslationSocket } from "./server/liveTranslationSocket";
 import { createListenHandler } from "./server/listenHandler";
+import { scheduleStreamingSettings } from "./services/torrserver/client";
 
 VERSION.displayVersion();
 
@@ -80,6 +81,9 @@ const startServer = async (): Promise<void> => {
 
     storageService.initializeStorage();
     downloadManager.initialize();
+    // Re-apply aggressive TorrServer bandwidth settings each boot (they reset on
+    // every sandbox recycle). Background-retries until TorrServer is reachable.
+    scheduleStreamingSettings();
 
     const frontendDist = path.join(__dirname, "../../frontend/dist");
 

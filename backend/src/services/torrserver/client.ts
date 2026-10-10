@@ -108,6 +108,9 @@ export async function addMagnet(
   title?: string
 ): Promise<string> {
   const { baseUrl, authHeader } = getConfig();
+  // Re-assert the aggressive bandwidth settings on every add (TorrServer resets
+  // them on each sandbox recycle). Fire-and-forget.
+  void applyStreamingSettings();
   const response = await axios.post(
     `${baseUrl}/torrents`,
     { action: "add", link, title: title ?? "", save_to_db: true },
@@ -118,6 +121,64 @@ export async function addMagnet(
     throw new Error("TorrServer did not return a torrent hash");
   }
   return hash;
+}
+
+/**
+ * Aggressive streaming/bandwidth settings pushed to TorrServer. Its settings DB
+ * lives on tmpfs and is wiped on each sandbox recycle, so we re-apply them on
+ * startup and on every add. Big RAM cache + high read-ahead + many connections
+ * + a large public tracker list = max download bandwidth and smooth playback.
+ */
+const STREAMING_SETTINGS = {
+  CacheSize: 1073741824, // 1 GB RAM cache (TorrServer default is 64 MB)
+  ReaderReadAHead: 95, // keep downloading far ahead of the playhead
+  PreloadCache: 20,
+  ConnectionsLimit: 1000, // more peers -> more bandwidth
+  DownloadRateLimit: 0, // unlimited
+  UploadRateLimit: 0,
+  RetrackersMode: 1, // append the tracker list to every torrent
+  TrackersListURL:
+    "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_all.txt",
+  TorrentDisconnectTimeout: 120,
+  UseDisk: false,
+} as const;
+
+/**
+ * Push the aggressive settings to TorrServer. Best-effort: returns false (never
+ * throws) when TorrServer is unreachable or disabled.
+ */
+export async function applyStreamingSettings(): Promise<boolean> {
+  if (!isTorrServerEnabled()) {
+    return false;
+  }
+  try {
+    const { baseUrl, authHeader } = getConfig();
+    await axios.post(
+      `${baseUrl}/settings`,
+      { action: "set", sets: STREAMING_SETTINGS },
+      { headers: authHeader, timeout: REQUEST_TIMEOUT_MS }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keep retrying applyStreamingSettings in the background until it lands (or give
+ * up after ~1 min). Fire-and-forget from server startup — TorrServer may not be
+ * up yet when MyTube boots.
+ */
+export function scheduleStreamingSettings(): void {
+  void (async () => {
+    for (let i = 0; i < 20; i += 1) {
+      if (await applyStreamingSettings()) {
+        logger.info("[TorrServer] streaming/bandwidth settings applied");
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  })();
 }
 
 /** Fetch torrent metadata (name + the list of files it contains). */
