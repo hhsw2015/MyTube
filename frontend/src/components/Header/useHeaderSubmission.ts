@@ -56,6 +56,15 @@ export const useHeaderSubmission = ({
         setIsSubmitting(true);
 
         try {
+            // A magnet link is neither a web URL nor a search term: route it to
+            // the torrent add flow (DownloadContext opens the file-picker modal
+            // via pendingMagnet), never to YouTube search.
+            if (/^magnet:\?/i.test(input)) {
+                await onSubmit(input);
+                resetInputAndCloseMenu();
+                return;
+            }
+
             // A search keeps its term in the box so it can be refined rather
             // than retyped; only a download clears the input.
             if (!inputIsUrl) {
