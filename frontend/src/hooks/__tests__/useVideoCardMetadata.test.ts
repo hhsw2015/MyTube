@@ -5,9 +5,14 @@ import { useVideoCardMetadata } from '../useVideoCardMetadata';
 const mockUseCloudStorageUrl = vi.hoisted(() => vi.fn());
 const mockGetFileUrl = vi.hoisted(() => vi.fn());
 const mockIsNewVideo = vi.hoisted(() => vi.fn());
+const mockUseSettings = vi.hoisted(() => vi.fn());
 
 vi.mock('../useCloudStorageUrl', () => ({
     useCloudStorageUrl: mockUseCloudStorageUrl
+}));
+
+vi.mock('../useSettings', () => ({
+    useSettings: mockUseSettings
 }));
 
 vi.mock('../../utils/cloudStorage', () => ({
@@ -24,6 +29,7 @@ describe('useVideoCardMetadata', () => {
         mockUseCloudStorageUrl.mockImplementation(() => undefined);
         mockGetFileUrl.mockResolvedValue(undefined);
         mockIsNewVideo.mockReturnValue(true);
+        mockUseSettings.mockReturnValue({ data: {} });
     });
 
     it('should prefer hook-provided cloud URLs for thumbnail and video', async () => {
@@ -122,6 +128,28 @@ describe('useVideoCardMetadata', () => {
         const { result } = renderHook(() => useVideoCardMetadata({ video: mockVideo as any }));
         await expect(result.current.getVideoUrl()).resolves.toBe(
             `${window.location.origin}/api/torrent-stream/66dace9b`
+        );
+    });
+
+    it('embeds the API key in the torrent stream URL when api-key auth is enabled', async () => {
+        mockUseSettings.mockReturnValue({ data: { apiKeyEnabled: true, apiKey: 'k3y-123' } });
+        const mockVideo = {
+            id: '66dace9b',
+            source: 'torrent',
+            videoPath: 'torrent:465e0e05/5'
+        };
+        const { result } = renderHook(() => useVideoCardMetadata({ video: mockVideo as any }));
+        await expect(result.current.getVideoUrl()).resolves.toBe(
+            `${window.location.origin}/api/torrent-stream/66dace9b?apiKey=k3y-123`
+        );
+    });
+
+    it('omits the API key when api-key auth is disabled', async () => {
+        mockUseSettings.mockReturnValue({ data: { apiKeyEnabled: false, apiKey: 'k3y-123' } });
+        const mockVideo = { id: 'v9', videoPath: 'torrent:abc/0' };
+        const { result } = renderHook(() => useVideoCardMetadata({ video: mockVideo as any }));
+        await expect(result.current.getVideoUrl()).resolves.toBe(
+            `${window.location.origin}/api/torrent-stream/v9`
         );
     });
 

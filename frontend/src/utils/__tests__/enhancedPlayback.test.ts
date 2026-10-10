@@ -22,6 +22,26 @@ describe('resolveHandoffUrl', () => {
         ).toBe('https://mytube.example/api/torrent-stream/v1');
     });
 
+    it('embeds the API key on an auth-gated signedUrl so the external player can stream it', () => {
+        expect(
+            resolveHandoffUrl(
+                { sourceUrl: 'magnet:?xt=urn:btih:abc', videoPath: 'torrent:abc/0', signedUrl: '/api/torrent-stream/v1' },
+                origin,
+                'k3y-123'
+            )
+        ).toBe('https://mytube.example/api/torrent-stream/v1?apiKey=k3y-123');
+    });
+
+    it('never attaches the API key to a re-extracted web sourceUrl', () => {
+        expect(
+            resolveHandoffUrl(
+                { sourceUrl: 'https://www.youtube.com/watch?v=abc', videoPath: 'torrent:abc/0' },
+                origin,
+                'k3y-123'
+            )
+        ).toBe('https://www.youtube.com/watch?v=abc');
+    });
+
     it('makes a local videoPath absolute and encodes it', () => {
         expect(
             resolveHandoffUrl({ videoPath: '/videos/Show/Ep #3.mp4' }, origin)

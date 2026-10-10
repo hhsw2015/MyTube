@@ -1,4 +1,4 @@
-import { encodeLocalMediaPath, isHttpUrl } from './localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, withApiKey } from './localMediaPath';
 
 export type EnhanceTier = 'speed' | 'quality' | 'max' | 'photo';
 export type EnhancePlayer = 'iina' | 'senplayer';
@@ -24,9 +24,12 @@ interface VideoLike {
  */
 export const resolveHandoffUrl = (
     video: VideoLike,
-    origin: string
+    origin: string,
+    apiKey?: string | null
 ): string | null => {
     if (video.sourceUrl && isHttpUrl(video.sourceUrl)) {
+        // Web source (YouTube/Bilibili/etc): ytplay re-extracts it, no MyTube
+        // auth involved — never attach the key here.
         return video.sourceUrl;
     }
 
@@ -38,20 +41,23 @@ export const resolveHandoffUrl = (
               }${pathOrUrl}`;
 
     // signedUrl is MyTube's resolved media path (torrent proxy, cloud, mount).
+    // It's behind auth, and the external player can't send a header, so embed
+    // the API key as a query param when available.
     if (video.signedUrl) {
-        return toAbsolute(video.signedUrl);
+        return withApiKey(toAbsolute(video.signedUrl), apiKey);
     }
     if (video.videoPath && isHttpUrl(video.videoPath)) {
         return video.videoPath;
     }
     // Local file served at /videos/...; encode special filename characters.
+    // Also same-origin + auth-gated, so attach the key.
     if (
         video.videoPath &&
         !video.videoPath.startsWith('cloud:') &&
         !video.videoPath.startsWith('mount:') &&
         !video.videoPath.startsWith('torrent:')
     ) {
-        return toAbsolute(encodeLocalMediaPath(video.videoPath));
+        return withApiKey(toAbsolute(encodeLocalMediaPath(video.videoPath)), apiKey);
     }
     return null;
 };

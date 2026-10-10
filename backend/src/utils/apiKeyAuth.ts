@@ -17,6 +17,16 @@ export const readHeaderValue = (
   return undefined;
 };
 
+const readQueryValue = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value) && typeof value[0] === "string") {
+    return value[0];
+  }
+  return undefined;
+};
+
 export const getApiKeyFromRequest = (req: Request): string | null => {
   const directHeaderKey = readHeaderValue(req.headers["x-api-key"]);
   if (typeof directHeaderKey === "string" && directHeaderKey.trim().length > 0) {
@@ -29,7 +39,19 @@ export const getApiKeyFromRequest = (req: Request): string | null => {
     authorizationHeader.startsWith("ApiKey ")
   ) {
     const apiKey = authorizationHeader.slice("ApiKey ".length).trim();
-    return apiKey.length > 0 ? apiKey : null;
+    if (apiKey.length > 0) {
+      return apiKey;
+    }
+  }
+
+  // Query-param fallback. Media URLs (torrent stream / mount proxy) are opened
+  // directly by external players and the native <video> element, which cannot
+  // set an x-api-key header. SECURITY: this puts the key in the URL (access
+  // logs, browser history); it only authorizes the same allowApiKey routes the
+  // header already does.
+  const queryKey = readQueryValue(req.query?.apiKey);
+  if (typeof queryKey === "string" && queryKey.trim().length > 0) {
+    return queryKey.trim();
   }
 
   return null;
@@ -42,10 +64,15 @@ export const hasApiKeyCredential = (req: Request): boolean => {
   }
 
   const authorizationHeader = readHeaderValue(req.headers.authorization);
-  return (
+  if (
     typeof authorizationHeader === "string" &&
     authorizationHeader.startsWith("ApiKey ")
-  );
+  ) {
+    return true;
+  }
+
+  const queryKey = readQueryValue(req.query?.apiKey);
+  return typeof queryKey === "string" && queryKey.trim().length > 0;
 };
 
 const isApiKeyMatch = (providedApiKey: string, storedApiKey: string): boolean => {

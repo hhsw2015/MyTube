@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import { Video } from '../types';
 import { isNewVideo } from '../utils/videoCardUtils';
 import { useCloudStorageUrl } from './useCloudStorageUrl';
+import { useSettings } from './useSettings';
 import { useThumbnailCandidates } from './useThumbnailCandidates';
-import { encodeLocalMediaPath, isHttpUrl } from '../utils/localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, withApiKey } from '../utils/localMediaPath';
 
 interface UseVideoCardMetadataProps {
     video: Video;
@@ -23,6 +24,12 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
     const mediaType = isAudioOnly ? 'audio' : 'video';
     const videoUrl = useCloudStorageUrl(video.videoPath, mediaType);
 
+    // The copied / external-player URL for a torrent or mount video points at an
+    // auth-gated proxy; embed the API key (admins receive it) so the link is
+    // actually playable when opened outside the authenticated browser session.
+    const { data: settings } = useSettings();
+    const apiKey = settings?.apiKeyEnabled ? settings?.apiKey : undefined;
+
     // Get video URL with fallback logic
     const getVideoUrl = async (): Promise<string> => {
         // If we have a cloud storage URL, use it directly
@@ -37,10 +44,10 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
         // raw "torrent:<hash>/<file>" (or "mount:") scheme was handed out verbatim
         // as a bogus, unplayable URL (e.g. copy-link / external player).
         if (video.videoPath?.startsWith('torrent:')) {
-            return `${window.location.origin}/api/torrent-stream/${video.id}`;
+            return withApiKey(`${window.location.origin}/api/torrent-stream/${video.id}`, apiKey);
         }
         if (video.videoPath?.startsWith('mount:')) {
-            return `${window.location.origin}/api/mount-video/${video.id}`;
+            return withApiKey(`${window.location.origin}/api/mount-video/${video.id}`, apiKey);
         }
 
         // If cloud storage path but URL not loaded yet, wait for it

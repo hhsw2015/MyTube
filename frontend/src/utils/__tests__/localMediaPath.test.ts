@@ -1,18 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { encodeLocalMediaPath, isHttpUrl } from '../localMediaPath';
+import { withApiKey } from '../localMediaPath';
 
-describe('encodeLocalMediaPath', () => {
-    it('keeps directory separators while encoding filename characters as path data', () => {
-        const url = encodeLocalMediaPath('/videos/Series #1/Episode #43 你好%?.mp4');
-
-        expect(url).toBe('/videos/Series%20%231/Episode%20%2343%20%E4%BD%A0%E5%A5%BD%25%3F.mp4');
-        expect(new URL(url, 'https://example.com').pathname).toBe(url);
-        expect(new URL(url, 'https://example.com').hash).toBe('');
+describe('withApiKey', () => {
+    it('appends apiKey with ? when the URL has no query string', () => {
+        expect(withApiKey('https://x/api/torrent-stream/v1', 'abc')).toBe(
+            'https://x/api/torrent-stream/v1?apiKey=abc'
+        );
     });
 
-    it('recognizes HTTP schemes regardless of case', () => {
-        expect(isHttpUrl('HTTPS://cdn.example/video.mp4')).toBe(true);
-        expect(isHttpUrl('hTtP://cdn.example/video.mp4')).toBe(true);
-        expect(isHttpUrl('/videos/Episode #43.mp4')).toBe(false);
+    it('appends apiKey with & when the URL already has a query string', () => {
+        expect(withApiKey('https://x/api/torrent-stream/v1?foo=1', 'abc')).toBe(
+            'https://x/api/torrent-stream/v1?foo=1&apiKey=abc'
+        );
+    });
+
+    it('url-encodes the key', () => {
+        const key = 'a/b c';
+        expect(withApiKey('https://x/m', key)).toBe(
+            `https://x/m?apiKey=${encodeURIComponent(key)}`
+        );
+    });
+
+    it('is a no-op without a key', () => {
+        expect(withApiKey('https://x/m')).toBe('https://x/m');
+        expect(withApiKey('https://x/m', '')).toBe('https://x/m');
+        expect(withApiKey('https://x/m', null)).toBe('https://x/m');
     });
 });

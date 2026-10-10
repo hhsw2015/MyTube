@@ -33,9 +33,12 @@ const EnhancedPlaybackButton: React.FC<EnhancedPlaybackButtonProps> = ({ video }
 
     const tier: EnhanceTier = settings.enhancedPlaybackTier ?? 'quality';
     const player: EnhancePlayer = settings.enhancedPlaybackPlayer ?? 'iina';
+    // The external player opens the handoff URL directly; embed the API key so
+    // auth-gated MyTube media (torrent/mount/local) is reachable without a cookie.
+    const apiKey = settings.apiKeyEnabled ? settings.apiKey : undefined;
 
     const handleClick = () => {
-        const handoffUrl = resolveHandoffUrl(video, window.location.origin);
+        const handoffUrl = resolveHandoffUrl(video, window.location.origin, apiKey);
         if (!handoffUrl) {
             showSnackbar(t('enhancedPlaybackNoSource') || 'No playable source for enhanced playback');
             return;
