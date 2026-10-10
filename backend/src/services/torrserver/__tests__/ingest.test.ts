@@ -33,6 +33,9 @@ import {
 
 const MAGNET = "magnet:?xt=urn:btih:deadbeef";
 
+// Don't actually poll for torrent metadata in tests.
+process.env.TORR_META_TIMEOUT_MS = "0";
+
 describe("addMagnetToLibrary", () => {
   beforeEach(() => {
     getVideoBySourceUrl.mockReset();

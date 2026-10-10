@@ -13,7 +13,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export interface TorrentFile {
@@ -29,6 +29,8 @@ interface MagnetModalProps {
     onInspect: (magnet: string) => Promise<TorrentFile[]>;
     /** Add the magnet; fileIds undefined = add the largest file automatically. */
     onConfirm: (magnet: string, fileIds?: number[]) => void | Promise<void>;
+    /** Prefill + auto-inspect this magnet when the dialog opens (search-box path). */
+    initialMagnet?: string;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -43,13 +45,36 @@ const formatBytes = (bytes: number): string => {
     return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 };
 
-const MagnetModal: React.FC<MagnetModalProps> = ({ open, onClose, onInspect, onConfirm }) => {
+const MagnetModal: React.FC<MagnetModalProps> = ({ open, onClose, onInspect, onConfirm, initialMagnet }) => {
     const { t } = useLanguage();
     const [magnet, setMagnet] = useState('');
     const [files, setFiles] = useState<TorrentFile[] | null>(null);
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [inspecting, setInspecting] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+
+    // Search-box path: when opened with a prefilled magnet, auto-inspect so the
+    // file list shows immediately.
+    useEffect(() => {
+        if (!open || !initialMagnet) return;
+        setMagnet(initialMagnet);
+        if (!/^magnet:\?/i.test(initialMagnet.trim())) return;
+        let cancelled = false;
+        setInspecting(true);
+        void (async () => {
+            try {
+                const result = await onInspect(initialMagnet.trim());
+                if (cancelled) return;
+                setFiles(result);
+                setSelected(new Set(result.length > 0 ? [result[0].id] : []));
+            } catch {
+                /* error surfaced by caller */
+            } finally {
+                if (!cancelled) setInspecting(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [open, initialMagnet, onInspect]);
 
     const trimmed = magnet.trim();
     const isValid = /^magnet:\?/i.test(trimmed);

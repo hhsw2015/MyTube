@@ -82,3 +82,6 @@ reports/*
 # Codacy CLI local snapshots (auto-generated; the shared config is .codacy/codacy.yaml)
 .codacy/codacy.config.json
 .codacy/codacy.config.baseline.json
+
+# Local VM deploy tooling — never commit (contains deploy scripts/secrets)
+stacks/hark-vm/

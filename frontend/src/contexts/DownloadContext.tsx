@@ -87,6 +87,12 @@ interface DownloadContextType {
     isCheckingParts: boolean;
     handlePlaylistDialogConfirm: (action: PlaylistDialogAction) => Promise<void>;
     handleDownloadCurrentBilibiliPart: () => Promise<any>;
+    // Magnet (torrent) flow: a magnet pasted anywhere (search box) opens the
+    // file-picker modal driven by pendingMagnet.
+    pendingMagnet: string | null;
+    setPendingMagnet: (magnet: string | null) => void;
+    inspectMagnetFiles: (magnet: string) => Promise<Array<{ id: number; path: string; length: number }>>;
+    submitMagnet: (magnet: string, fileIds?: number[]) => Promise<any>;
 }
 
 const DownloadContext = createContext<DownloadContextType | undefined>(undefined);
@@ -199,6 +205,7 @@ export const DownloadProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         collectionInfo: null // For collection/series, stores the API response
     });
     const [isCheckingParts, setIsCheckingParts] = useState<boolean>(false);
+    const [pendingMagnet, setPendingMagnet] = useState<string | null>(null);
     // Subscription logic
     const [showSubscribeModal, setShowSubscribeModal] = useState(false);
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -293,6 +300,13 @@ export const DownloadProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             normalizedSkipPartsCheck = skipPartsCheck === true;
         }
         try {
+            // Magnet link: route to the torrent add flow (file-picker modal),
+            // never to YouTube search or the normal download path.
+            if (/^magnet:\?/i.test(videoUrl.trim())) {
+                setPendingMagnet(videoUrl.trim());
+                return { success: true, magnet: true };
+            }
+
             // Check for YouTube playlist URL (must check before channel check)
             const playlistRegex = /[?&]list=([a-zA-Z0-9_-]+)/;
 
@@ -475,6 +489,19 @@ export const DownloadProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, [
         checkBackendDownloadStatus, setVideos, showSnackbar, t, queryClient, handleSearch,
     ]);
+
+    const inspectMagnetFiles = useCallback(async (magnet: string) => {
+        const response = await api.post('/torrent/inspect', { magnet });
+        return response.data?.files ?? [];
+    }, []);
+
+    const submitMagnet = useCallback(async (magnet: string, fileIds?: number[]) => {
+        const response = await api.post('/torrent/add', { magnet, fileIds });
+        showSnackbar(t('magnetAdded') || 'Magnet added to library');
+        void queryClient.invalidateQueries({ queryKey: ['videos'] });
+        void queryClient.invalidateQueries({ queryKey: ['collections'] });
+        return response.data;
+    }, [showSnackbar, t, queryClient]);
 
     const handleAudioOnlyDownload = useCallback(async (
         videoUrl: string,
@@ -819,7 +846,12 @@ export const DownloadProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isCheckingParts,
         handlePlaylistDialogConfirm,
         handleDownloadCurrentBilibiliPart,
+        pendingMagnet,
+        setPendingMagnet,
+        inspectMagnetFiles,
+        submitMagnet,
     }), [
+        pendingMagnet, inspectMagnetFiles, submitMagnet,
         activeDownloads, queuedDownloads, handleVideoSubmit, handleAudioOnlyDownload, showBilibiliPartsModal,
         bilibiliPartsInfo, isCheckingParts, handlePlaylistDialogConfirm,
         handleDownloadCurrentBilibiliPart,

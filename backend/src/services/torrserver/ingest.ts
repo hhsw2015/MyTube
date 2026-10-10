@@ -3,8 +3,34 @@ import path from "path";
 import * as storageService from "../storageService";
 import type { Video } from "../storageService/types";
 import { logger } from "../../utils/logger";
-import { addMagnet, getTorrent, type TorrServerFile } from "./client";
+import {
+  addMagnet,
+  getTorrent,
+  type TorrServerFile,
+  type TorrServerTorrent,
+} from "./client";
 import { buildTorrentVideoPath } from "./torrentPath";
+
+// A fresh magnet needs time to resolve its file list from the swarm; TorrServer
+// returns an empty list until metadata arrives. Poll getTorrent until files
+// appear (or timeout) so the first add succeeds instead of erroring.
+const TORRENT_METADATA_TIMEOUT_MS = 60000;
+const TORRENT_METADATA_POLL_MS = 2000;
+
+async function waitForTorrentFiles(hash: string): Promise<TorrServerTorrent> {
+  // Env-overridable so tests don't actually wait.
+  const timeoutMs = Number(
+    process.env.TORR_META_TIMEOUT_MS ?? TORRENT_METADATA_TIMEOUT_MS
+  );
+  const pollMs = Number(process.env.TORR_META_POLL_MS ?? TORRENT_METADATA_POLL_MS);
+  const deadline = Date.now() + timeoutMs;
+  let torrent = await getTorrent(hash);
+  while (torrent.files.length === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    torrent = await getTorrent(hash);
+  }
+  return torrent;
+}
 
 const VIDEO_EXTENSIONS = new Set([
   ".mp4",
@@ -87,7 +113,7 @@ export async function inspectMagnet(
     throw new Error("Not a valid magnet link");
   }
   const hash = await addMagnet(link);
-  const torrent = await getTorrent(hash);
+  const torrent = await waitForTorrentFiles(hash);
   const videoFiles = torrent.files.filter(isVideoFile);
   const files = videoFiles.length > 0 ? videoFiles : torrent.files;
   // Largest first so the picker can pre-select sensibly.
@@ -118,7 +144,7 @@ export async function addMagnetToLibrary(
   }
 
   const hash = await addMagnet(link);
-  const torrent = await getTorrent(hash);
+  const torrent = await waitForTorrentFiles(hash);
   const file = pickPlayableFile(torrent.files);
   if (!file) {
     throw new Error("Torrent contains no files");
@@ -159,7 +185,7 @@ export async function addMagnetFilesToLibrary(
   }
 
   const hash = await addMagnet(link);
-  const torrent = await getTorrent(hash);
+  const torrent = await waitForTorrentFiles(hash);
   const selected = torrent.files.filter((file) => wanted.includes(file.id));
   if (selected.length === 0) {
     throw new Error("None of the selected files exist in the torrent");

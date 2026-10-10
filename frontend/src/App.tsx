@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './App.css';
 import Footer from './components/Footer';
 import Header from './components/Header';
+import MagnetModal from './components/MagnetModal';
 import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollectionProvider, useCollection } from './contexts/CollectionContext';
@@ -72,7 +73,11 @@ function AppContent() {
         bilibiliPartsInfo,
         isCheckingParts,
         handlePlaylistDialogConfirm,
-        handleDownloadCurrentBilibiliPart
+        handleDownloadCurrentBilibiliPart,
+        pendingMagnet,
+        setPendingMagnet,
+        inspectMagnetFiles,
+        submitMagnet
     } = useDownload();
 
     const { isAuthenticated, loginRequired, checkingAuth } = useAuth();
@@ -136,6 +141,17 @@ function AppContent() {
                                     onResetSearch={resetSearch}
                                     collections={collections}
                                     videos={videos}
+                                />
+
+                                {/* Magnet add modal — opened when a magnet is pasted in the search box */}
+                                <MagnetModal
+                                    open={!!pendingMagnet}
+                                    initialMagnet={pendingMagnet ?? ''}
+                                    onClose={() => setPendingMagnet(null)}
+                                    onInspect={inspectMagnetFiles}
+                                    onConfirm={async (magnet, fileIds) => {
+                                        await submitMagnet(magnet, fileIds);
+                                    }}
                                 />
 
                                 {/* Bilibili Parts Modal */}
