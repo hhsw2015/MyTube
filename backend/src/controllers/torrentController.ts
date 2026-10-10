@@ -107,6 +107,30 @@ export const downloadTorrent = async (
 };
 
 /**
+ * GET /api/torrent/downloads — list in-progress offline downloads with their
+ * progress (bytes/total). Powers the download-list UI. Admin-gated.
+ */
+export const listDownloads = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
+  sendData(res, { downloads: torrserver.listOfflineDownloads() });
+};
+
+/**
+ * POST /api/torrent/:id/cancel-download — abort an in-progress offline download
+ * and discard its partial file. Admin-gated.
+ */
+export const cancelDownload = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const id = getStringParam(req.params.id) ?? "";
+  const canceled = torrserver.cancelOfflineDownload(id);
+  sendData(res, { canceled });
+};
+
+/**
  * GET /api/torrent/health — liveness probe for the Settings UI. Admin-gated.
  */
 export const health = async (_req: Request, res: Response): Promise<void> => {

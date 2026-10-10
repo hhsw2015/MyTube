@@ -128,5 +128,19 @@ export const startBackgroundJobs = (port: number): void => {
       );
     });
 
+  // Resume offline torrent downloads interrupted by a restart / VM recycle.
+  // Delayed so TorrServer has a chance to come up first; a still-down TorrServer
+  // just means the retry happens on the next startup (sidecars are kept).
+  import("../services/torrserver")
+    .then(({ resumeInterruptedDownloads }) => {
+      setTimeout(() => void resumeInterruptedDownloads(), 10_000);
+    })
+    .catch((error) => {
+      logger.warn(
+        "Failed to schedule interrupted torrent download resume",
+        error instanceof Error ? error : new Error(String(error))
+      );
+    });
+
   startCloudflaredIfEnabled(port);
 };
