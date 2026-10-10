@@ -8,6 +8,7 @@ import { NotFoundError, ValidationError } from "../errors/DownloadErrors";
 import { syncMediaServerArtifactsForRecord } from "../services/mediaServerExport";
 import { invalidateRecommendationSignalsCache } from "../services/recommendationSignalsService";
 import * as storageService from "../services/storageService";
+import * as torrserver from "../services/torrserver";
 import { addTagsToGlobalSettings } from "../services/tagService";
 import { logger } from "../utils/logger";
 import {
@@ -217,6 +218,12 @@ export const getVideoById = async (
     video.signedUrl = `/api/mount-video/${id}`;
   }
 
+  // Torrent (stream-mode) videos resolve to the same-origin Range-forwarding
+  // proxy so the native <video> element's session cookie reaches media auth.
+  if (video.videoPath?.startsWith("torrent:")) {
+    video.signedUrl = `/api/torrent-stream/${id}`;
+  }
+
   // Return video object directly for backward compatibility (frontend expects response.data to be Video)
   sendData(res, video);
 };
@@ -230,10 +237,19 @@ export const deleteVideo = async (
   res: Response
 ): Promise<void> => {
   const id = getStringParam(req.params.id) ?? "";
+  // Capture the torrent hash before deletion so we can clean up TorrServer.
+  const torrentInfo = torrserver.parseTorrentVideoPath(
+    storageService.getVideoById(id)?.videoPath
+  );
   const success = storageService.deleteVideo(id);
 
   if (!success) {
     throw new NotFoundError("Video", id);
+  }
+
+  if (torrentInfo) {
+    // Best-effort: stop seeding/caching the torrent on TorrServer.
+    void torrserver.removeTorrent(torrentInfo.hash);
   }
 
   sendSuccess(res, null, "Video deleted successfully");

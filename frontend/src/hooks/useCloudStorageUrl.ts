@@ -3,6 +3,7 @@ import {
   getFileUrl,
   isCloudStoragePath,
   isMountDirectoryPath,
+  isTorrentPath,
 } from "../utils/cloudStorage";
 
 import { getBackendUrl } from "../utils/apiUrl";
@@ -36,10 +37,13 @@ type: "video" | "audio" | "thumbnail" = "video",
   const syncUrl = useMemo(() => {
     if (!path) return undefined;
 
-    // If we have an initial pre-signed URL (for cloud storage or mount directory), use it
+    // If we have an initial pre-signed URL (cloud storage, mount directory, or
+    // torrent stream proxy), use it.
     if (
       initialUrl &&
-      (path.startsWith("cloud:") || path.startsWith("mount:"))
+      (path.startsWith("cloud:") ||
+        path.startsWith("mount:") ||
+        path.startsWith("torrent:"))
     ) {
       return constructFullUrl(initialUrl);
     }
@@ -51,7 +55,11 @@ type: "video" | "audio" | "thumbnail" = "video",
 
     // Local paths work through the nginx proxy, but filename characters such as
     // '#' must be encoded so the browser includes them in the request path.
-    if (!isCloudStoragePath(path) && !isMountDirectoryPath(path)) {
+    if (
+      !isCloudStoragePath(path) &&
+      !isMountDirectoryPath(path) &&
+      !isTorrentPath(path)
+    ) {
       return encodeLocalMediaPath(path);
     }
 

@@ -29,3 +29,19 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
       - net.ipv6.conf.default.disable_ipv6=1
+
+  # Optional: TorrServer for magnet "watch while downloading" streaming.
+  # Both services share Compose's default network, so the mytube backend reaches
+  # TorrServer at http://torrserver:8090. Enable it and set that base URL under
+  # Settings > Library > TorrServer. Delete this service to opt out.
+  torrserver:
+    image: ghcr.io/yourok/torrserver:latest
+    container_name: mytube-torrserver
+    command: ["--port", "8090", "--path", "/ts-data"]
+    volumes:
+      - torrserver-data:/ts-data
+    restart: unless-stopped
+
+volumes:
+  torrserver-data:
+    driver: local

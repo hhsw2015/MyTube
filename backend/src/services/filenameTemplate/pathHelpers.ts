@@ -72,7 +72,12 @@ export function resolveManagedWebPath(webPath: string): {
   absolutePath: string;
 } | null {
   if (!webPath || typeof webPath !== "string") return null;
-  if (webPath.startsWith("cloud:") || webPath.startsWith("mount:")) return null;
+  if (
+    webPath.startsWith("cloud:") ||
+    webPath.startsWith("mount:") ||
+    webPath.startsWith("torrent:")
+  )
+    return null;
   if (webPath.startsWith("http://") || webPath.startsWith("https://")) return null;
 
   for (const { webPrefix, rootDir } of MANAGED_PREFIXES) {

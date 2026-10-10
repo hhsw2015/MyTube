@@ -624,6 +624,11 @@ export async function prepareSettingsForSave(
   if (preserveUnsetFields && !hasField("cloudflaredToken")) {
     prepared.cloudflaredToken = existingSettings.cloudflaredToken;
   }
+  // torrServerAuth is admin-only; preserve it when a save omits it so a
+  // partial settings update cannot silently wipe the stored credential.
+  if (preserveUnsetFields && !hasField("torrServerAuth")) {
+    prepared.torrServerAuth = existingSettings.torrServerAuth;
+  }
   if (preserveUnsetFields && !hasField("allowedHosts")) {
     prepared.allowedHosts = existingSettings.allowedHosts;
   }

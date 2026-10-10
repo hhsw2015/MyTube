@@ -11,7 +11,7 @@ interface VideoAuthorInfoProps {
     date: string | undefined;
     onAuthorClick: () => void;
     onAvatarClick?: () => void;
-    source?: 'youtube' | 'bilibili' | 'twitch' | 'local' | 'missav';
+    source?: 'youtube' | 'bilibili' | 'twitch' | 'local' | 'missav' | 'torrent';
     isSubscribed?: boolean;
     onSubscribe?: () => void;
     onUnsubscribe?: () => void;

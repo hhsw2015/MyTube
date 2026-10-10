@@ -33,6 +33,12 @@ export type ExplicitPreferredVideoContainer = Exclude<
 export type LiveTranslationModel = "gemini-3.5-live-translate-preview";
 export const AUDIO_FORMATS = ["m4a", "mp3", "opus"] as const;
 export type AudioFormat = (typeof AUDIO_FORMATS)[number];
+
+// Enhanced playback (streamlink-ytplay GPU upscale) tiers + supported players.
+export const ENHANCE_TIERS = ["speed", "quality", "max", "photo"] as const;
+export type EnhanceTier = (typeof ENHANCE_TIERS)[number];
+export const ENHANCE_PLAYERS = ["iina", "senplayer"] as const;
+export type EnhancePlayer = (typeof ENHANCE_PLAYERS)[number];
 export const DEFAULT_PLAYER_SEEK_SHORT_SECONDS = 10;
 export const DEFAULT_PLAYER_SEEK_MEDIUM_SECONDS = 60;
 export const DEFAULT_PLAYER_SEEK_LONG_SECONDS = 600;
@@ -78,6 +84,15 @@ export interface Settings {
   openListApiUrl?: string;
   openListToken?: string;
   openListPublicUrl?: string;
+  // TorrServer (magnet stream-while-downloading) integration.
+  torrServerEnabled?: boolean;
+  torrServerBaseUrl?: string;
+  torrServerAuth?: string; // optional "user:pass" for HTTP Basic (admin-only)
+  // Enhanced playback: hand a video off to the local streamlink-ytplay GPU
+  // upscale pipeline via a `ytplay://` URL scheme, playing in an external player.
+  enhancedPlaybackEnabled?: boolean;
+  enhancedPlaybackPlayer?: EnhancePlayer;
+  enhancedPlaybackTier?: EnhanceTier;
   cloudDrivePath?: string;
   cloudDriveScanPaths?: string;
   homeSidebarOpen?: boolean;
@@ -181,6 +196,12 @@ export const defaultSettings: Settings = {
   openListApiUrl: "",
   openListToken: "",
   openListPublicUrl: "",
+  torrServerEnabled: false,
+  torrServerBaseUrl: "",
+  torrServerAuth: "",
+  enhancedPlaybackEnabled: false,
+  enhancedPlaybackPlayer: "iina",
+  enhancedPlaybackTier: "quality",
   cloudDrivePath: "",
   cloudDriveScanPaths: "",
   homeSidebarOpen: true,

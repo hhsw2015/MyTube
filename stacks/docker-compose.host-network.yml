@@ -33,6 +33,20 @@ services:
     # has half-enabled IPv6 and Chromium navigation times out on dual-stack
     # domains, disable IPv6 on the host itself with sysctl.
 
+  # Optional: TorrServer for magnet "watch while downloading" streaming.
+  # IMPORTANT: in host-network mode the backend cannot resolve a bridge service
+  # name, so TorrServer also runs on host networking and the backend reaches it
+  # at http://localhost:8090. Set that as the base URL under
+  # Settings > Library > TorrServer.
+  torrserver:
+    image: ghcr.io/yourok/torrserver:latest
+    container_name: mytube-torrserver
+    network_mode: host
+    command: ["--port", "8090", "--path", "/ts-data"]
+    volumes:
+      - torrserver-data:/ts-data
+    restart: unless-stopped
+
   frontend:
     image: franklioxygen/mytube:frontend-latest
     pull_policy: always
@@ -56,6 +70,8 @@ services:
 
 volumes:
   backend-data:
+    driver: local
+  torrserver-data:
     driver: local
 
 networks:

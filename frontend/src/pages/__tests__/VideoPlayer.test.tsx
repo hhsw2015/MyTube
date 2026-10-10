@@ -127,6 +127,13 @@ vi.mock('../../hooks/useStatisticsIngestion', () => ({
 
 vi.mock('../../utils/apiUrl', () => ({
     getBackendUrl: () => 'http://localhost:5000',
+    getApiUrl: () => '/api',
+}));
+
+// Isolated unit test: stub the enhanced-playback child (it pulls Snackbar +
+// settings contexts the harness does not provide).
+vi.mock('../../components/VideoPlayer/EnhancedPlaybackButton', () => ({
+    default: () => null,
 }));
 
 // ---- Mock child components with data-testid and exposed callbacks ----

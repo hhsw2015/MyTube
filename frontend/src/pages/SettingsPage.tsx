@@ -19,6 +19,8 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import AdvancedSettings from '../components/Settings/AdvancedSettings';
 import BasicSettings from '../components/Settings/BasicSettings';
 import CloudDriveSettings from '../components/Settings/CloudDriveSettings';
+import TorrServerSettings from '../components/Settings/TorrServerSettings';
+import EnhancedPlaybackSettings from '../components/Settings/EnhancedPlaybackSettings';
 import CloudflareSettings from '../components/Settings/CloudflareSettings';
 import CookieSettings from '../components/Settings/CookieSettings';
 import DatabaseSettings from '../components/Settings/DatabaseSettings';
@@ -566,6 +568,20 @@ const SettingsPage: React.FC = () => {
             <Box>
                 <Typography variant="h6" gutterBottom>{t('cloudDriveSettings')}</Typography>
                 <CloudDriveSettings
+                    settings={settings}
+                    onChange={handleChange}
+                />
+            </Box>
+            <Box>
+                <Typography variant="h6" gutterBottom>{t('torrServerSettings') || 'TorrServer'}</Typography>
+                <TorrServerSettings
+                    settings={settings}
+                    onChange={handleChange}
+                />
+            </Box>
+            <Box>
+                <Typography variant="h6" gutterBottom>{t('enhancedPlaybackSettings') || 'Enhanced Playback'}</Typography>
+                <EnhancedPlaybackSettings
                     settings={settings}
                     onChange={handleChange}
                 />

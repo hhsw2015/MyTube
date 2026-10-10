@@ -34,6 +34,20 @@ services:
     # network_mode: host
     # Then set NGINX_BACKEND_URL=http://localhost:5551 for frontend service
 
+  # Optional: TorrServer for magnet "watch while downloading" streaming.
+  # The MyTube backend reaches it in-network at http://torrserver:8090 and
+  # proxies playback, so no public port is needed. Enable + set that base URL
+  # under Settings > Library > TorrServer.
+  torrserver:
+    image: ghcr.io/yourok/torrserver:latest
+    container_name: mytube-torrserver
+    command: ["--port", "8090", "--path", "/ts-data"]
+    volumes:
+      - torrserver-data:/ts-data
+    restart: unless-stopped
+    networks:
+      - mytube-network
+
   frontend:
     image: franklioxygen/mytube:frontend-latest
     pull_policy: always
@@ -62,6 +76,8 @@ services:
 
 volumes:
   backend-data:
+    driver: local
+  torrserver-data:
     driver: local
 
 networks:

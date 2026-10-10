@@ -30,6 +30,17 @@ export const isMountDirectoryPath = (
 };
 
 /**
+ * Check if a path is a torrent stream path (starts with "torrent:").
+ * Torrent videos are streamed through the same-origin backend proxy; the hook
+ * resolves them from the video's signedUrl exactly like mount: paths.
+ */
+export const isTorrentPath = (
+  path: string | null | undefined
+): boolean => {
+  return path?.startsWith("torrent:") ?? false;
+};
+
+/**
  * Extract filename from cloud storage path (removes "cloud:" prefix)
  */
 export const extractCloudFilename = (path: string): string => {
