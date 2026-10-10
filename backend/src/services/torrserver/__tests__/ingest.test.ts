@@ -19,6 +19,7 @@ vi.mock("../../storageService", () => ({
 vi.mock("../client", () => ({
   addMagnet: (...args: unknown[]) => addMagnet(...args),
   getTorrent: (...args: unknown[]) => getTorrent(...args),
+  keepTorrentActive: vi.fn(),
 }));
 
 vi.mock("../../../utils/logger", () => ({

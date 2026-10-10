@@ -6,6 +6,7 @@ import { logger } from "../../utils/logger";
 import {
   addMagnet,
   getTorrent,
+  keepTorrentActive,
   type TorrServerFile,
   type TorrServerTorrent,
 } from "./client";
@@ -24,9 +25,13 @@ async function waitForTorrentFiles(hash: string): Promise<TorrServerTorrent> {
   );
   const pollMs = Number(process.env.TORR_META_POLL_MS ?? TORRENT_METADATA_POLL_MS);
   const deadline = Date.now() + timeoutMs;
+  // Trigger the metadata fetch — a passive getTorrent never resolves because
+  // TorrServer closes an unread torrent by timeout.
+  await keepTorrentActive(hash);
   let torrent = await getTorrent(hash);
   while (torrent.files.length === 0 && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
+    await keepTorrentActive(hash); // keep it active each poll so info resolves
     torrent = await getTorrent(hash);
   }
   return torrent;

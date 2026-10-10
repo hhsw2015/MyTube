@@ -177,6 +177,24 @@ export async function removeTorrent(hash: string): Promise<void> {
   }
 }
 
+/**
+ * Poke the stream endpoint so TorrServer actively fetches the torrent's
+ * metadata. Without an active reader TorrServer closes a fresh torrent "by
+ * timeout" before its file list resolves, so `getTorrent` alone never returns
+ * files. Call this while polling. Best-effort; errors are ignored.
+ */
+export async function keepTorrentActive(hash: string): Promise<void> {
+  try {
+    const { baseUrl, authHeader } = getConfig();
+    await axios.get(
+      `${baseUrl}/stream?link=${encodeURIComponent(hash)}&stat`,
+      { headers: authHeader, timeout: 8000, validateStatus: () => true }
+    );
+  } catch {
+    // best-effort trigger
+  }
+}
+
 /** Liveness probe for the Settings UI health check. */
 export async function checkHealth(): Promise<boolean> {
   try {
