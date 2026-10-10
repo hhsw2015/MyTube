@@ -61,6 +61,7 @@ export {
     deleteVideo,
     getVideoById,
     getVideoBySourceUrl,
+    getVideosByTorrentHash,
     getVideos,
     getVideosStrict,
     getArtifactOwners,

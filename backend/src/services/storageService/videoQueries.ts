@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { db } from "../../db";
 import { videos } from "../../db/schema";
 import { DatabaseError } from "../../errors/DownloadErrors";
@@ -227,6 +227,34 @@ export function getVideoBySourceUrl(
       error instanceof Error ? error : new Error(String(error)),
       "getVideoBySourceUrl"
     );
+  }
+}
+
+/**
+ * All library videos backed by a given TorrServer torrent hash (videoPath form
+ * `torrent:<hash>/<fileId>`). Used to delete the matching library rows when a
+ * torrent is cancelled/removed.
+ */
+export function getVideosByTorrentHash(
+  hash: string
+): import("./types").Video[] {
+  try {
+    const rows = db
+      .select()
+      .from(videos)
+      .where(like(videos.videoPath, `torrent:${hash}/%`))
+      .all();
+    return rows.map((v) => ({
+      ...v,
+      tags: v.tags ? JSON.parse(v.tags) : [],
+      subtitles: v.subtitles ? JSON.parse(v.subtitles) : undefined,
+    })) as import("./types").Video[];
+  } catch (error) {
+    logger.error(
+      "Error getting videos by torrent hash",
+      error instanceof Error ? error : new Error(String(error))
+    );
+    return [];
   }
 }
 

@@ -219,6 +219,63 @@ export function buildStreamUrl(
   )}&index=${fileId}&play`;
 }
 
+export interface TorrServerActiveTorrent {
+  hash: string;
+  name: string;
+  title: string;
+  torrentSize: number;
+  downloadSpeed: number;
+  preloadedBytes: number;
+  activePeers: number;
+  totalPeers: number;
+  connectedSeeders: number;
+}
+
+/** List all torrents currently in TorrServer (the added magnets). */
+export async function listTorrents(): Promise<
+  Array<{ hash: string; name: string; title: string }>
+> {
+  const { baseUrl, authHeader } = getConfig();
+  const response = await axios.post(
+    `${baseUrl}/torrents`,
+    { action: "list" },
+    { headers: authHeader, timeout: REQUEST_TIMEOUT_MS }
+  );
+  const list = Array.isArray(response.data) ? response.data : [];
+  return list
+    .map((t: Record<string, unknown>) => ({
+      hash: String(t.hash ?? ""),
+      name: String(t.name ?? t.title ?? ""),
+      title: String(t.title ?? t.name ?? ""),
+    }))
+    .filter((t: { hash: string }) => t.hash.length > 0);
+}
+
+/**
+ * Live stat for one torrent (speed/size/peers). Only meaningful while the
+ * torrent has an active reader; an idle torrent reports zeros. Best-effort.
+ */
+export async function getTorrentStat(
+  hash: string
+): Promise<Omit<TorrServerActiveTorrent, "name" | "title">> {
+  const { baseUrl, authHeader } = getConfig();
+  const response = await axios.post(
+    `${baseUrl}/torrents`,
+    { action: "get", hash },
+    { headers: authHeader, timeout: REQUEST_TIMEOUT_MS }
+  );
+  const d = response.data ?? {};
+  return {
+    hash,
+    torrentSize: Number(d.torrent_size ?? 0),
+    downloadSpeed: Number(d.download_speed ?? 0),
+    preloadedBytes: Number(d.preloaded_bytes ?? 0),
+    activePeers: Number(d.active_peers ?? 0),
+    totalPeers: Number(d.total_peers ?? 0),
+    connectedSeeders: Number(d.connected_seeders ?? 0),
+  };
+}
+
 /** Remove a torrent from TorrServer (used when the MyTube video is deleted). */
 export async function removeTorrent(hash: string): Promise<void> {
   try {

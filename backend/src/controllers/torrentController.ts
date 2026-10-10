@@ -131,6 +131,65 @@ export const cancelDownload = async (
 };
 
 /**
+ * GET /api/torrent/active — list the torrents currently in TorrServer (the
+ * added magnets) with live stat + the matching library video id. Powers the
+ * "added magnets" view of the download list. Admin-gated.
+ */
+export const listActiveTorrents = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
+  if (!torrserver.isTorrServerEnabled()) {
+    sendData(res, { torrents: [] });
+    return;
+  }
+  const list = await torrserver.listTorrents();
+  const torrents = await Promise.all(
+    list.map(async (t) => {
+      const stat = await torrserver.getTorrentStat(t.hash).catch(() => null);
+      const matches = storageService.getVideosByTorrentHash(t.hash);
+      return {
+        hash: t.hash,
+        name: t.name,
+        videoId: matches[0]?.id ?? null,
+        torrentSize: stat?.torrentSize ?? 0,
+        downloadSpeed: stat?.downloadSpeed ?? 0,
+        preloadedBytes: stat?.preloadedBytes ?? 0,
+        activePeers: stat?.activePeers ?? 0,
+        connectedSeeders: stat?.connectedSeeders ?? 0,
+      };
+    })
+  );
+  sendData(res, { torrents });
+};
+
+/**
+ * POST /api/torrent/active/:hash/remove — cancel/remove an added torrent:
+ * delete any library rows backed by it, then drop it from TorrServer. Admin-gated.
+ */
+export const cancelActiveTorrent = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const hash = getStringParam(req.params.hash) ?? "";
+  // Hashes are hex/base32 infohashes; reject anything else so it can't widen the
+  // LIKE match or reach TorrServer with junk.
+  if (!/^[a-zA-Z0-9]+$/.test(hash)) {
+    throw new ValidationError("A valid torrent hash is required", "hash");
+  }
+  const matches = storageService.getVideosByTorrentHash(hash);
+  let removedVideos = 0;
+  for (const video of matches) {
+    if (storageService.deleteVideo(video.id)) {
+      removedVideos += 1;
+    }
+  }
+  // Best-effort: also covers orphan torrents with no library row.
+  await torrserver.removeTorrent(hash);
+  sendData(res, { removed: true, removedVideos });
+};
+
+/**
  * GET /api/torrent/health — liveness probe for the Settings UI. Admin-gated.
  */
 export const health = async (_req: Request, res: Response): Promise<void> => {

@@ -8,6 +8,7 @@ export {
   getArtifactOwners,
   getVideoSummaries,
   getVideoBySourceUrl,
+  getVideosByTorrentHash,
   getVideoById,
   getVideoPartBySourceUrl,
 } from "./videoQueries";

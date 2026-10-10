@@ -121,6 +121,19 @@ const DownloadPage: React.FC = () => {
         staleTime: 1000,
     });
 
+    // Added magnets live in TorrServer (stream mode), not the generic manager.
+    // Poll them so the user can see and remove what they added.
+    const { data: activeTorrents = [] } = useQuery({
+        queryKey: ['activeTorrents'],
+        queryFn: async () => {
+            const response = await api.get('/torrent/active');
+            return response.data?.torrents ?? [];
+        },
+        enabled: userRole === 'admin' && Boolean(settings?.torrServerEnabled),
+        refetchInterval: 3000,
+        staleTime: 1500,
+    });
+
     const torrentActive = (torrentDownloads as Array<{
         videoId: string;
         title: string;
@@ -134,7 +147,26 @@ const DownloadPage: React.FC = () => {
         totalSize: d.totalBytes > 0 ? formatSize(d.totalBytes) : '?',
     }));
     const torrentIds = new Set(torrentActive.map((d) => d.id));
-    const combinedActive = [...activeDownloads, ...torrentActive];
+
+    // Added-magnet torrents. id is prefixed "ts:" so cancel routes to the
+    // torrent-remove endpoint; progress bar reflects the preloaded buffer.
+    const torrentRows = (activeTorrents as Array<{
+        hash: string;
+        name: string;
+        torrentSize: number;
+        downloadSpeed: number;
+        preloadedBytes: number;
+        connectedSeeders: number;
+    }>).map((t) => ({
+        id: `ts:${t.hash}`,
+        title: t.name,
+        progress: t.torrentSize > 0 ? Math.min(100, (t.preloadedBytes / t.torrentSize) * 100) : 0,
+        speed: t.downloadSpeed > 0 ? `${formatSize(t.downloadSpeed)}/s` : `${t.connectedSeeders || 0} seeds`,
+        downloadedSize: formatSize(t.preloadedBytes),
+        totalSize: t.torrentSize > 0 ? formatSize(t.torrentSize) : '?',
+    }));
+
+    const combinedActive = [...activeDownloads, ...torrentActive, ...torrentRows];
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
@@ -186,7 +218,27 @@ const DownloadPage: React.FC = () => {
         },
     });
 
+    // Remove an added-magnet torrent (deletes its library video + drops it from
+    // TorrServer).
+    const torrentRemoveMutation = useMutation({
+        mutationFn: async (hash: string) => {
+            await api.post(`/torrent/active/${hash}/remove`);
+        },
+        onSuccess: () => {
+            showSnackbar(t('downloadCancelled') || 'Removed');
+            queryClient.invalidateQueries({ queryKey: ['activeTorrents'] });
+            queryClient.invalidateQueries({ queryKey: ['videos'] });
+        },
+        onError: () => {
+            showSnackbar(t('error') || 'Error');
+        },
+    });
+
     const handleCancelDownload = (id: string) => {
+        if (id.startsWith('ts:')) {
+            torrentRemoveMutation.mutate(id.slice(3));
+            return;
+        }
         if (torrentIds.has(id)) {
             torrentCancelMutation.mutate(id);
             return;
@@ -429,7 +481,9 @@ const DownloadPage: React.FC = () => {
                             ? cancelMutation.variables ?? null
                             : torrentCancelMutation.isPending
                                 ? torrentCancelMutation.variables ?? null
-                                : null
+                                : torrentRemoveMutation.isPending
+                                    ? `ts:${torrentRemoveMutation.variables}`
+                                    : null
                     }
                 />
             </CustomTabPanel>
