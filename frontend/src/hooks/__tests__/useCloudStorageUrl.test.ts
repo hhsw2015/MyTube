@@ -42,6 +42,16 @@ describe('useCloudStorageUrl', () => {
         expect(signedResult.current).toBe(remote);
     });
 
+    it('resolves torrent paths from the pre-signed proxy URL', () => {
+        // Torrent videos arrive with signedUrl = /api/torrent-stream/<id>; the
+        // hook must use it (same path as mount:), not treat torrent: as local.
+        const proxy = 'http://localhost:5551/api/torrent-stream/vid1';
+        const { result } = renderHook(() =>
+            useCloudStorageUrl('torrent:deadbeef/0', 'video', proxy)
+        );
+        expect(result.current).toBe(proxy);
+    });
+
     it('should calculate local URL synchronously', () => {
         vi.mocked(cloudStorageUtils.isCloudStoragePath).mockReturnValue(false);
         // Assuming default BACKEND_URL

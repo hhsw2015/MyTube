@@ -18,6 +18,8 @@ import VideoControls from '../components/VideoPlayer/VideoControls';
 import CompatibilityPlayer from '../components/VideoPlayer/CompatibilityPlayer';
 import LiveTranslationStatusAlert from '../components/VideoPlayer/LiveTranslationStatusAlert';
 import VideoInfo from '../components/VideoPlayer/VideoInfo';
+import TorrentVideoActions from '../components/VideoPlayer/TorrentVideoActions';
+import EnhancedPlaybackButton from '../components/VideoPlayer/EnhancedPlaybackButton';
 import { LiveTranslationProvider } from '../contexts/LiveTranslationContext';
 import { useLiveTranslationAvailability } from '../hooks/useLiveTranslationAvailability';
 import { useLiveTranslationSubtitleTrack } from '../hooks/useLiveTranslationSubtitleTrack';
@@ -839,6 +841,12 @@ const VideoPlayer: React.FC = () => {
                             onToggleLock={handleToggleLock}
                             onSeek={handleDescriptionSeek}
                         />
+
+                        {video.source === 'torrent' && (
+                            <TorrentVideoActions videoId={video.id} />
+                        )}
+
+                        <EnhancedPlaybackButton video={video} />
 
                         {(video.source === 'youtube' || video.source === 'bilibili') && (
                             <CommentsSection

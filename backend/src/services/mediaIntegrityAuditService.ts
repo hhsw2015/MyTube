@@ -437,7 +437,7 @@ export async function auditMediaIntegrity(
     // Case-insensitive: `HTTP://` is a valid external URL, and the managed-path
     // resolver matches lowercase only, so an uppercase scheme would fall through
     // to the local branch and be reported as a missing file.
-    if (webPath && /^(?:cloud:|mount:|https?:\/\/)/i.test(webPath)) {
+    if (webPath && /^(?:cloud:|mount:|torrent:|https?:\/\/)/i.test(webPath)) {
       summary.skippedExternal += 1;
       continue;
     }

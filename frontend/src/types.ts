@@ -3,7 +3,7 @@ export interface Video {
   title: string;
   author: string;
   date: string;
-  source: "youtube" | "bilibili" | "twitch" | "local" | "missav";
+  source: "youtube" | "bilibili" | "twitch" | "local" | "missav" | "torrent";
   sourceUrl: string;
   videoFilename?: string;
   thumbnailFilename?: string;
@@ -209,6 +209,12 @@ export interface Settings {
   openListApiUrl: string;
   openListToken: string;
   openListPublicUrl?: string;
+  torrServerEnabled?: boolean;
+  torrServerBaseUrl?: string;
+  torrServerAuth?: string;
+  enhancedPlaybackEnabled?: boolean;
+  enhancedPlaybackPlayer?: 'iina' | 'senplayer';
+  enhancedPlaybackTier?: 'speed' | 'quality' | 'max' | 'photo';
   cloudDrivePath: string;
   cloudDriveScanPaths?: string;
   homeSidebarOpen?: boolean;

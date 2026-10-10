@@ -19,6 +19,7 @@ const ADMIN_ONLY_SETTINGS_KEYS = new Set([
   "apiKey",
   "apiKeyEnabled",
   "openListToken",
+  "torrServerAuth",
   "cloudflaredToken",
   "tmdbApiKey",
   "telegramBotToken",

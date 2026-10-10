@@ -31,6 +31,17 @@ describe('cloudStorage', () => {
         });
     });
 
+    describe('isTorrentPath', () => {
+        it('should identify torrent paths only', () => {
+            expect(cloudStorage.isTorrentPath('torrent:abc/0')).toBe(true);
+            expect(cloudStorage.isTorrentPath('cloud:video.mp4')).toBe(false);
+            expect(cloudStorage.isTorrentPath('mount:/x')).toBe(false);
+            expect(cloudStorage.isTorrentPath('/videos/x.mp4')).toBe(false);
+            expect(cloudStorage.isTorrentPath(null)).toBe(false);
+            expect(cloudStorage.isTorrentPath(undefined)).toBe(false);
+        });
+    });
+
     describe('extractCloudFilename', () => {
         it('should extract filename', () => {
             expect(cloudStorage.extractCloudFilename('cloud:video.mp4')).toBe('video.mp4');

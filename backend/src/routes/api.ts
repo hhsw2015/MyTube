@@ -12,6 +12,7 @@ import * as scanController from "../controllers/scanController";
 import * as statisticsController from "../controllers/statisticsController";
 import * as subscriptionController from "../controllers/subscriptionController";
 import * as systemController from "../controllers/systemController";
+import * as torrentController from "../controllers/torrentController";
 import * as userController from "../controllers/userController";
 import * as videoController from "../controllers/videoController";
 import * as videoDownloadController from "../controllers/videoDownloadController";
@@ -48,6 +49,36 @@ const apiRouteDefinitions: ApiRouteDefinition[] = [
       videoController.upload.single("video"),
       asyncHandler(videoController.uploadVideo),
     ],
+  },
+  // Torrent (TorrServer) routes
+  {
+    method: "post",
+    path: "/torrent/inspect",
+    handlers: [requireAdmin, asyncHandler(torrentController.inspectMagnet)],
+  },
+  {
+    method: "post",
+    path: "/torrent/add",
+    handlers: [requireAdmin, asyncHandler(torrentController.addMagnet)],
+  },
+  {
+    method: "post",
+    path: "/torrent/:id/download",
+    handlers: [requireAdmin, asyncHandler(torrentController.downloadTorrent)],
+  },
+  {
+    method: "get",
+    path: "/torrent/health",
+    handlers: [requireAdmin, asyncHandler(torrentController.health)],
+  },
+  {
+    // Same-origin Range-forwarding stream proxy. allowApiKey mirrors
+    // mount-video so API-key automation can stream too; the native <video>
+    // element reaches it with the session cookie.
+    method: "get",
+    path: "/torrent-stream/:id",
+    allowApiKey: true,
+    handlers: [asyncHandler(torrentController.serveTorrentStream)],
   },
   {
     method: "post",

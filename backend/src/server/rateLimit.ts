@@ -188,6 +188,7 @@ export const configureRateLimiting = (app: Express): AuthLimiters => {
       req.path.startsWith("/api/rss/feed/") ||
       req.path.startsWith("/videos/") ||
       req.path.startsWith("/api/mount-video/") ||
+      req.path.startsWith("/api/torrent-stream/") ||
       req.path.startsWith("/images-small/") ||
       req.path.startsWith("/images/") ||
       req.path.startsWith("/subtitles/") ||

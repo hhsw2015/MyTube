@@ -1757,4 +1757,43 @@ export const en = {
   gestureLoginResetRequired: "Your saved gesture can no longer be verified on this server. Set a new one.",
   gestureLoginStatusFailed: "Gesture Login status could not be loaded.",
   gestureLoginRetryStatus: "Retry",
+  // TorrServer (magnet stream-while-downloading)
+  addMagnet: "Add magnet",
+  addMagnetHelp:
+    "Paste a magnet link to stream it while it downloads via TorrServer.",
+  invalidMagnet: "Not a valid magnet link",
+  magnetAdded: "Magnet added to library",
+  torrServerSettings: "TorrServer",
+  torrServerDescription:
+    "Stream magnet links while they download via an external TorrServer instance. Playback is proxied through MyTube, so the browser never talks to TorrServer directly.",
+  enableTorrServer: "Enable TorrServer",
+  torrServerBaseUrl: "TorrServer base URL",
+  torrServerBaseUrlHelper:
+    "The in-network address the MyTube backend uses to reach TorrServer.",
+  torrServerAuth: "Auth (user:pass, optional)",
+  torrServerAuthHelper:
+    "Optional HTTP Basic credentials if your TorrServer requires auth.",
+  torrServerReachable: "TorrServer is reachable",
+  torrServerUnreachable:
+    "Could not reach TorrServer (save settings first, then retry)",
+  inspectFiles: "Choose files...",
+  inspecting: "Inspecting...",
+  noPlayableFiles: "No files found in this torrent.",
+  torrentStreamBadge: "Torrent · live stream",
+  torrentStreamTooltip:
+    "Streamed live from the torrent swarm; may stop playing if no seeders remain.",
+  downloadForOffline: "Download for offline",
+  downloadingForOffline: "Downloading...",
+  offlineDownloadStarted: "Downloading for offline...",
+  enhancedPlayback: "Enhanced play",
+  enhancedPlaybackLaunched: "Launching enhanced player...",
+  enhancedPlaybackNoSource: "No playable source for enhanced playback",
+  enhancedPlaybackTooltip:
+    "Upscale with the local GPU pipeline and play in an external player (requires the ytplay handler installed on this machine).",
+  enhancedPlaybackSettings: "Enhanced Playback",
+  enhancedPlaybackDescription:
+    "Hand a video off to a local GPU upscale pipeline (streamlink-ytplay) and play it in an external player (IINA / SenPlayer). Only works on a machine with the ytplay scheme handler installed.",
+  enableEnhancedPlayback: "Enable enhanced playback",
+  enhancedPlaybackPlayer: "External player",
+  enhancedPlaybackTier: "Enhance tier",
 };

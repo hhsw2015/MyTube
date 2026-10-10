@@ -1,4 +1,4 @@
-import { CloudUpload, PlaylistAdd as PlaylistAddIcon } from '@mui/icons-material';
+import { Bolt as MagnetIcon, CloudUpload, PlaylistAdd as PlaylistAddIcon } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -10,8 +10,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import BatchDownloadModal from '../../components/BatchDownloadModal';
+import MagnetModal from '../../components/MagnetModal';
 import UploadModal from '../../components/UploadModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../hooks/useSettings';
 import { useDownload } from '../../contexts/DownloadContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
@@ -38,8 +40,30 @@ const DownloadPage: React.FC = () => {
     const [tabValue, setTabValue] = useState(0);
     const [showBatchModal, setShowBatchModal] = useState(false);
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
+    const [magnetModalOpen, setMagnetModalOpen] = useState(false);
     const [downloadingItems, setDownloadingItems] = useState<Set<string>>(new Set());
     const canUpload = userRole === 'admin' || loginRequired === false;
+    const { data: settings } = useSettings();
+    // Magnet ingestion is admin-gated (POST /torrent/add requires admin) and
+    // only useful once TorrServer is configured.
+    const canAddMagnet = userRole === 'admin' && Boolean(settings?.torrServerEnabled);
+
+    const handleMagnetInspect = async (magnet: string) => {
+        const response = await api.post('/torrent/inspect', { magnet });
+        return response.data?.files ?? [];
+    };
+
+    const handleMagnetSubmit = async (magnet: string, fileIds?: number[]) => {
+        try {
+            await api.post('/torrent/add', { magnet, fileIds });
+            showSnackbar(t('magnetAdded') || 'Magnet added to library');
+            void queryClient.invalidateQueries({ queryKey: ['videos'] });
+            void queryClient.invalidateQueries({ queryKey: ['collections'] });
+        } catch (error: unknown) {
+            console.error('Error adding magnet:', error);
+            showSnackbar(t('error') || 'Error');
+        }
+    };
 
     const handleUploadSuccess = (summary: UploadBatchSummary) => {
         void queryClient.invalidateQueries({ queryKey: ['videos'] });
@@ -310,6 +334,16 @@ const DownloadPage: React.FC = () => {
                     >
                         {t('addBatchTasks') || 'Add batch tasks'}
                     </Button>
+                    {canAddMagnet && (
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<MagnetIcon />}
+                            onClick={() => setMagnetModalOpen(true)}
+                        >
+                            {t('addMagnet') || 'Add magnet'}
+                        </Button>
+                    )}
                     {canUpload && (
                         <Button
                             variant="contained"
@@ -377,6 +411,14 @@ const DownloadPage: React.FC = () => {
                 onClose={() => setShowBatchModal(false)}
                 onConfirm={handleBatchSubmit}
             />
+            {canAddMagnet && (
+                <MagnetModal
+                    open={magnetModalOpen}
+                    onClose={() => setMagnetModalOpen(false)}
+                    onInspect={handleMagnetInspect}
+                    onConfirm={handleMagnetSubmit}
+                />
+            )}
             {canUpload && (
                 <UploadModal
                     open={uploadModalOpen}
