@@ -18,6 +18,7 @@ import { useDownload } from '../../contexts/DownloadContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { api } from '../../utils/apiClient';
+import { formatSize } from '../../utils/formatUtils';
 import { ActiveDownloadsTab } from './ActiveDownloadsTab';
 import { CustomTabPanel } from './CustomTabPanel';
 import { DownloadHistoryItem } from './HistoryItem';
@@ -106,6 +107,35 @@ const DownloadPage: React.FC = () => {
         gcTime: 5 * 60 * 1000, // Garbage collect after 5 minutes
     });
 
+    // Offline torrent downloads (Mode B) run outside the generic download
+    // manager, so poll them separately and merge into the Active tab. Admin-only
+    // endpoint; gated so visitors never fire a 401.
+    const { data: torrentDownloads = [] } = useQuery({
+        queryKey: ['torrentDownloads'],
+        queryFn: async () => {
+            const response = await api.get('/torrent/downloads');
+            return response.data?.downloads ?? [];
+        },
+        enabled: userRole === 'admin' && Boolean(settings?.torrServerEnabled),
+        refetchInterval: 2000,
+        staleTime: 1000,
+    });
+
+    const torrentActive = (torrentDownloads as Array<{
+        videoId: string;
+        title: string;
+        downloadedBytes: number;
+        totalBytes: number;
+    }>).map((d) => ({
+        id: d.videoId,
+        title: d.title,
+        progress: d.totalBytes > 0 ? (d.downloadedBytes / d.totalBytes) * 100 : 0,
+        downloadedSize: formatSize(d.downloadedBytes),
+        totalSize: d.totalBytes > 0 ? formatSize(d.totalBytes) : '?',
+    }));
+    const torrentIds = new Set(torrentActive.map((d) => d.id));
+    const combinedActive = [...activeDownloads, ...torrentActive];
+
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
     };
@@ -142,7 +172,25 @@ const DownloadPage: React.FC = () => {
         },
     });
 
+    // Cancel an offline torrent download (discards its partial file).
+    const torrentCancelMutation = useMutation({
+        mutationFn: async (id: string) => {
+            await api.post(`/torrent/${id}/cancel-download`);
+        },
+        onSuccess: () => {
+            showSnackbar(t('downloadCancelled') || 'Download cancelled');
+            queryClient.invalidateQueries({ queryKey: ['torrentDownloads'] });
+        },
+        onError: () => {
+            showSnackbar(t('error') || 'Error');
+        },
+    });
+
     const handleCancelDownload = (id: string) => {
+        if (torrentIds.has(id)) {
+            torrentCancelMutation.mutate(id);
+            return;
+        }
         cancelMutation.mutate(id);
     };
 
@@ -374,9 +422,15 @@ const DownloadPage: React.FC = () => {
 
             <CustomTabPanel value={tabValue} index={0}>
                 <ActiveDownloadsTab
-                    downloads={activeDownloads}
+                    downloads={combinedActive}
                     onCancel={handleCancelDownload}
-                    cancellingId={cancelMutation.isPending ? cancelMutation.variables ?? null : null}
+                    cancellingId={
+                        cancelMutation.isPending
+                            ? cancelMutation.variables ?? null
+                            : torrentCancelMutation.isPending
+                                ? torrentCancelMutation.variables ?? null
+                                : null
+                    }
                 />
             </CustomTabPanel>
 
