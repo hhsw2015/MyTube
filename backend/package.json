@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "reset-password": "ts-node scripts/reset-password.ts",
+    "build:prod": "tsc -p tsconfig.build.json",
+    "start:prod": "node dist/server.js",
     "postinstall": "node scripts/postinstall.cjs"
   },
   "engines": {
