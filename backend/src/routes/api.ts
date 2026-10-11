@@ -68,26 +68,6 @@ const apiRouteDefinitions: ApiRouteDefinition[] = [
   },
   {
     method: "get",
-    path: "/torrent/downloads",
-    handlers: [requireAdmin, asyncHandler(torrentController.listDownloads)],
-  },
-  {
-    method: "get",
-    path: "/torrent/active",
-    handlers: [requireAdmin, asyncHandler(torrentController.listActiveTorrents)],
-  },
-  {
-    method: "post",
-    path: "/torrent/active/:hash/remove",
-    handlers: [requireAdmin, asyncHandler(torrentController.cancelActiveTorrent)],
-  },
-  {
-    method: "post",
-    path: "/torrent/:id/cancel-download",
-    handlers: [requireAdmin, asyncHandler(torrentController.cancelDownload)],
-  },
-  {
-    method: "get",
     path: "/torrent/health",
     handlers: [requireAdmin, asyncHandler(torrentController.health)],
   },

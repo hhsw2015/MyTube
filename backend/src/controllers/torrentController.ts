@@ -4,6 +4,7 @@ import { ValidationError, NotFoundError } from "../errors/DownloadErrors";
 import { isLoginRequired } from "../services/passwordService";
 import * as storageService from "../services/storageService";
 import * as torrserver from "../services/torrserver";
+import downloadManager from "../services/downloadManager";
 import { logger } from "../utils/logger";
 import { getStringParam } from "../utils/paramUtils";
 import { sendData } from "../utils/response";
@@ -24,6 +25,35 @@ const assertTorrServerEnabled = (): void => {
       "magnet"
     );
   }
+};
+
+/**
+ * Enqueue the offline-download task for a torrent library video so it flows
+ * through the normal download manager — identical progress / stop / delete /
+ * history to a yt-dlp download. The row stays streamable while it downloads and
+ * becomes a local `/videos` file on completion. No-op if one is already active.
+ */
+const enqueueTorrentDownload = (video?: {
+  id?: string;
+  title?: string;
+  sourceUrl?: string;
+}): void => {
+  const id = video?.id;
+  if (!id || storageService.getActiveDownload(id)) {
+    return;
+  }
+  void downloadManager
+    .addDownload(
+      (registerCancel) => torrserver.downloadTorrentTask(id, registerCancel),
+      id,
+      video?.title || "Torrent",
+      video?.sourceUrl,
+      "torrent",
+      { actorRole: "admin", surface: "web", sourceKind: "manual" }
+    )
+    .catch(() => {
+      // errors are logged inside the task
+    });
 };
 
 /**
@@ -65,12 +95,14 @@ export const addMagnet = async (
       .map((id: unknown) => Number(id))
       .filter((id) => Number.isInteger(id));
     const result = await torrserver.addMagnetFilesToLibrary(magnet, fileIds);
+    result.videos.forEach((video) => enqueueTorrentDownload(video));
     res.status(result.created > 0 ? 201 : 200);
     sendData(res, result);
     return;
   }
 
   const result = await torrserver.addMagnetToLibrary(magnet);
+  enqueueTorrentDownload(result.video);
   res.status(result.created ? 201 : 200);
   sendData(res, result.video);
 };
@@ -92,101 +124,17 @@ export const downloadTorrent = async (
   if (!torrserver.parseTorrentVideoPath(video.videoPath)) {
     throw new ValidationError("Video is not a torrent stream entry", "id");
   }
-  if (torrserver.isOfflineDownloadInProgress(id)) {
+  if (storageService.getActiveDownload(id)) {
     res.status(202);
     sendData(res, { started: false, alreadyRunning: true });
     return;
   }
 
-  // Fire-and-forget: the row flips to a local path when the download finishes.
-  void torrserver.downloadTorrentToLibrary(id).catch(() => {
-    // Errors are logged inside the service; nothing to do here.
-  });
+  // Enqueue as a normal download-manager task — progress/stop/delete via the
+  // standard /api/download-status + /api/downloads/cancel endpoints and UI.
+  enqueueTorrentDownload(video);
   res.status(202);
   sendData(res, { started: true });
-};
-
-/**
- * GET /api/torrent/downloads — list in-progress offline downloads with their
- * progress (bytes/total). Powers the download-list UI. Admin-gated.
- */
-export const listDownloads = async (
-  _req: Request,
-  res: Response
-): Promise<void> => {
-  sendData(res, { downloads: torrserver.listOfflineDownloads() });
-};
-
-/**
- * POST /api/torrent/:id/cancel-download — abort an in-progress offline download
- * and discard its partial file. Admin-gated.
- */
-export const cancelDownload = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  const id = getStringParam(req.params.id) ?? "";
-  const canceled = torrserver.cancelOfflineDownload(id);
-  sendData(res, { canceled });
-};
-
-/**
- * GET /api/torrent/active — list the torrents currently in TorrServer (the
- * added magnets) with live stat + the matching library video id. Powers the
- * "added magnets" view of the download list. Admin-gated.
- */
-export const listActiveTorrents = async (
-  _req: Request,
-  res: Response
-): Promise<void> => {
-  if (!torrserver.isTorrServerEnabled()) {
-    sendData(res, { torrents: [] });
-    return;
-  }
-  const list = await torrserver.listTorrents();
-  const torrents = await Promise.all(
-    list.map(async (t) => {
-      const stat = await torrserver.getTorrentStat(t.hash).catch(() => null);
-      const matches = storageService.getVideosByTorrentHash(t.hash);
-      return {
-        hash: t.hash,
-        name: t.name,
-        videoId: matches[0]?.id ?? null,
-        torrentSize: stat?.torrentSize ?? 0,
-        downloadSpeed: stat?.downloadSpeed ?? 0,
-        preloadedBytes: stat?.preloadedBytes ?? 0,
-        activePeers: stat?.activePeers ?? 0,
-        connectedSeeders: stat?.connectedSeeders ?? 0,
-      };
-    })
-  );
-  sendData(res, { torrents });
-};
-
-/**
- * POST /api/torrent/active/:hash/remove — cancel/remove an added torrent:
- * delete any library rows backed by it, then drop it from TorrServer. Admin-gated.
- */
-export const cancelActiveTorrent = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  const hash = getStringParam(req.params.hash) ?? "";
-  // Hashes are hex/base32 infohashes; reject anything else so it can't widen the
-  // LIKE match or reach TorrServer with junk.
-  if (!/^[a-zA-Z0-9]+$/.test(hash)) {
-    throw new ValidationError("A valid torrent hash is required", "hash");
-  }
-  const matches = storageService.getVideosByTorrentHash(hash);
-  let removedVideos = 0;
-  for (const video of matches) {
-    if (storageService.deleteVideo(video.id)) {
-      removedVideos += 1;
-    }
-  }
-  // Best-effort: also covers orphan torrents with no library row.
-  await torrserver.removeTorrent(hash);
-  sendData(res, { removed: true, removedVideos });
 };
 
 /**

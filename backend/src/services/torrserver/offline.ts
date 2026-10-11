@@ -2,42 +2,29 @@ import axios from "axios";
 import fs from "fs-extra";
 import { VIDEOS_DIR } from "../../config/paths";
 import * as storageService from "../storageService";
+import type { Video } from "../storageService/types";
 import {
   createWriteStreamSafe,
   resolveSafePathInDirectories,
   sanitizePathSegment,
 } from "../../utils/security";
+import { formatBytes } from "../../utils/downloadUtils";
 import { logger } from "../../utils/logger";
 import { buildStreamUrl, getAuthHeader, removeTorrent } from "./client";
 import { parseTorrentVideoPath } from "./torrentPath";
 
-// Mode B — "download for offline". Streams the selected TorrServer file to
-// VIDEOS_DIR (which lives on persistent JuiceFS), converts the library row to an
-// ordinary local video, and drops the torrent from TorrServer.
+// Mode B — "download for offline", now a first-class downloadManager task so it
+// shows the SAME progress / stop / delete / history as a yt-dlp download (no
+// separate torrent list). The task fn streams the TorrServer file to VIDEOS_DIR
+// (persistent JuiceFS), reports progress via storageService.updateActiveDownload
+// (the manager created the active row), and on completion converts the library
+// row from a `torrent:` stream entry into an ordinary local `/videos` file.
 //
-// Resumable across VM recycles: the partial file (`<name>.part`) and a small
-// JSON sidecar (`<name>.part.json`, carrying the torrent hash/fileId) both live
-// on persistent storage. A failed/interrupted download KEEPS them, so
-// `resumeInterruptedDownloads()` (run at startup) re-requests the remaining
-// bytes via an HTTP Range request and appends. Only an explicit cancel deletes
-// them. Progress is tracked in-memory for the download-list UI.
+// Resumable across restarts / VM recycles: the partial `.part` file + a JSON
+// sidecar (hash/fileId) persist; a failure KEEPS them so
+// resumeInterruptedDownloads() re-enqueues and continues via an HTTP Range
+// request. An explicit cancel discards them.
 
-export interface OfflineDownloadProgress {
-  videoId: string;
-  title: string;
-  finalName: string;
-  downloadedBytes: number;
-  totalBytes: number; // 0 when unknown
-  status: "downloading" | "finalizing";
-  startedAt: number;
-}
-
-interface ActiveDownload extends OfflineDownloadProgress {
-  controller: AbortController;
-  canceled: boolean;
-}
-
-// Durable resume marker written next to the `.part` file.
 interface DownloadSidecar {
   videoId: string;
   hash: string;
@@ -46,31 +33,6 @@ interface DownloadSidecar {
   videoFilename?: string;
 }
 
-const active = new Map<string, ActiveDownload>();
-
-export function isOfflineDownloadInProgress(videoId: string): boolean {
-  return active.has(videoId);
-}
-
-/** Snapshot of in-progress offline downloads for the download-list endpoint. */
-export function listOfflineDownloads(): OfflineDownloadProgress[] {
-  return [...active.values()].map(
-    ({ controller: _c, canceled: _k, ...pub }) => pub
-  );
-}
-
-/** Abort an in-progress offline download; the partial file is discarded. */
-export function cancelOfflineDownload(videoId: string): boolean {
-  const entry = active.get(videoId);
-  if (!entry) {
-    return false;
-  }
-  entry.canceled = true;
-  entry.controller.abort();
-  return true;
-}
-
-/** Pick a safe on-disk filename for the downloaded torrent file. */
 const resolveLocalFilename = (
   videoId: string,
   videoFilename?: string
@@ -82,10 +44,10 @@ const resolveLocalFilename = (
 const sidecarName = (finalName: string): string => `${finalName}.part.json`;
 
 async function writeSidecar(sidecar: DownloadSidecar): Promise<void> {
-  const p = resolveSafePathInDirectories(sidecarName(sidecar.finalName), [
-    VIDEOS_DIR,
-  ]);
-  await fs.writeJson(p, sidecar);
+  await fs.writeJson(
+    resolveSafePathInDirectories(sidecarName(sidecar.finalName), [VIDEOS_DIR]),
+    sidecar
+  );
 }
 
 async function removeArtifacts(
@@ -105,9 +67,8 @@ async function removeArtifacts(
 }
 
 /**
- * Derive the total file size from an upstream response. On a 206 append the
- * total is the `bytes a-b/total` suffix of Content-Range; on a fresh 200 it is
- * Content-Length. Returns 0 when the server does not advertise a size.
+ * Total file size from an upstream response: the `/total` suffix of Content-Range
+ * on a 206 resume, else Content-Length on a fresh 200. 0 when not advertised.
  */
 export function parseTotalBytes(
   headers: Record<string, unknown>,
@@ -127,36 +88,35 @@ export function parseTotalBytes(
   return Number.isFinite(len) && len > 0 ? len : 0;
 }
 
-export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
-  if (active.has(videoId)) {
-    return;
-  }
+/**
+ * downloadManager task fn: download the torrent's file to disk with live
+ * progress, cancellation, and resume. Resolves `{ success, video }` on
+ * completion; throws on failure (KEEP the partial for resume) or on cancel
+ * (DISCARD the partial, keep the still-streamable library row).
+ */
+export async function downloadTorrentTask(
+  videoId: string,
+  registerCancel: (cancel: () => void) => void
+): Promise<{ success: boolean; video: Video | undefined }> {
   const video = storageService.getVideoById(videoId);
   if (!video) {
     throw new Error("Video not found");
   }
   const parsed = parseTorrentVideoPath(video.videoPath);
   if (!parsed) {
-    throw new Error("Video is not a torrent stream entry");
+    // Already converted to a local file by a previous run — nothing to do.
+    return { success: true, video };
   }
 
   const finalName = resolveLocalFilename(videoId, video.videoFilename);
   const partName = `${finalName}.part`;
   const partPath = resolveSafePathInDirectories(partName, [VIDEOS_DIR]);
-
   const controller = new AbortController();
-  const entry: ActiveDownload = {
-    videoId,
-    title: video.title || finalName,
-    finalName,
-    downloadedBytes: 0,
-    totalBytes: 0,
-    status: "downloading",
-    startedAt: Date.now(),
-    controller,
-    canceled: false,
-  };
-  active.set(videoId, entry);
+  let canceled = false;
+  registerCancel(() => {
+    canceled = true;
+    controller.abort();
+  });
 
   try {
     await writeSidecar({
@@ -167,14 +127,12 @@ export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
       videoFilename: video.videoFilename,
     });
 
-    // Resume from however many bytes already landed on disk.
     let startByte = 0;
     try {
       startByte = (await fs.stat(partPath)).size;
     } catch {
       startByte = 0;
     }
-    entry.downloadedBytes = startByte;
 
     const url = buildStreamUrl(parsed.hash, parsed.fileId, video.videoFilename);
     const response = await axios.get(url, {
@@ -188,17 +146,16 @@ export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
       validateStatus: (status) => status >= 200 && status < 300,
     });
 
-    // 206 honours our Range (append); a 200 means the server ignored it, so
-    // restart from scratch to avoid a corrupt file.
     const appending = response.status === 206 && startByte > 0;
     if (!appending) {
       startByte = 0;
-      entry.downloadedBytes = 0;
     }
-    entry.totalBytes = parseTotalBytes(
+    const totalBytes = parseTotalBytes(
       response.headers as Record<string, unknown>,
       appending
     );
+    let downloaded = startByte;
+    let lastTick = 0;
 
     await new Promise<void>((resolve, reject) => {
       const writeStream = createWriteStreamSafe(partName, VIDEOS_DIR, {
@@ -206,7 +163,17 @@ export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
       });
       const upstream = response.data as NodeJS.ReadableStream;
       upstream.on("data", (chunk: Buffer) => {
-        entry.downloadedBytes += chunk.length;
+        downloaded += chunk.length;
+        const now = Date.now();
+        if (now - lastTick >= 1000) {
+          lastTick = now;
+          storageService.updateActiveDownload(videoId, {
+            progress:
+              totalBytes > 0 ? Math.min(100, (downloaded / totalBytes) * 100) : 0,
+            downloadedSize: formatBytes(downloaded),
+            totalSize: totalBytes > 0 ? formatBytes(totalBytes) : "?",
+          });
+        }
       });
       upstream.on("error", reject);
       writeStream.on("error", reject);
@@ -214,11 +181,8 @@ export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
       upstream.pipe(writeStream);
     });
 
-    entry.status = "finalizing";
     const finalPath = resolveSafePathInDirectories(finalName, [VIDEOS_DIR]);
     await fs.move(partPath, finalPath, { overwrite: true });
-
-    // Convert to an ordinary local video; keep source="torrent" to record origin.
     storageService.updateVideo(videoId, {
       videoPath: `/videos/${finalName}`,
       videoFilename: finalName,
@@ -228,32 +192,27 @@ export async function downloadTorrentToLibrary(videoId: string): Promise<void> {
     logger.info(
       `[TorrServer] Offline download complete for video ${videoId} -> /videos/${finalName}`
     );
+    return { success: true, video: storageService.getVideoById(videoId) };
   } catch (error) {
-    if (entry.canceled) {
-      // Explicit cancel: discard partial + sidecar so a retry starts clean.
+    if (canceled) {
+      // Explicit cancel: discard the partial so a retry starts clean. The
+      // library row stays a streamable `torrent:` entry.
       await removeArtifacts(finalName, { partToo: true });
-      logger.info(
-        `[TorrServer] Offline download canceled for video ${videoId}`
-      );
-      return;
+      logger.info(`[TorrServer] Offline download canceled for video ${videoId}`);
+      throw new Error("Download cancelled");
     }
-    // Interruption/failure: KEEP the partial file + sidecar so the next startup
-    // (or a manual retry) resumes from where it stopped.
+    // Interruption/failure: KEEP the partial + sidecar so resume continues.
     logger.error(
       `[TorrServer] Offline download failed for video ${videoId} (will resume)`,
       error instanceof Error ? error : new Error(String(error))
     );
     throw error;
-  } finally {
-    active.delete(videoId);
   }
 }
 
 /**
- * Resume any offline downloads interrupted by a restart/VM recycle. Scans
- * VIDEOS_DIR for resume sidecars and re-triggers each one. Best-effort: runs in
- * the background and tolerates TorrServer not yet being reachable (the download
- * errors, keeps its sidecar, and the next startup retries).
+ * Re-enqueue offline downloads interrupted by a restart / VM recycle onto the
+ * downloadManager. Best-effort; runs at startup.
  */
 export async function resumeInterruptedDownloads(): Promise<void> {
   let entries: string[];
@@ -262,7 +221,7 @@ export async function resumeInterruptedDownloads(): Promise<void> {
   } catch {
     return;
   }
-
+  const downloadManager = (await import("../downloadManager")).default;
   for (const name of entries.filter((f) => f.endsWith(".part.json"))) {
     try {
       const sidecar: DownloadSidecar = await fs.readJson(
@@ -270,18 +229,28 @@ export async function resumeInterruptedDownloads(): Promise<void> {
       );
       const video = storageService.getVideoById(sidecar.videoId);
       if (!video || !parseTorrentVideoPath(video.videoPath)) {
-        // Video gone or already finalized: drop the stray marker.
         await removeArtifacts(sidecar.finalName, { partToo: true });
         continue;
+      }
+      if (storageService.getActiveDownload(sidecar.videoId)) {
+        continue; // already running
       }
       logger.info(
         `[TorrServer] Resuming interrupted offline download for video ${sidecar.videoId}`
       );
-      void downloadTorrentToLibrary(sidecar.videoId).catch(() => {
-        // Errors are logged inside the service; sidecar is kept for next retry.
-      });
+      void downloadManager
+        .addDownload(
+          (rc) => downloadTorrentTask(sidecar.videoId, rc),
+          sidecar.videoId,
+          video.title,
+          video.sourceUrl,
+          "torrent"
+        )
+        .catch(() => {
+          // errors are logged inside the task; sidecar kept for next retry
+        });
     } catch {
-      // Malformed sidecar: ignore (leave it for manual inspection).
+      // malformed sidecar: ignore
     }
   }
 }
