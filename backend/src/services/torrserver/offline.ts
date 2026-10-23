@@ -1,5 +1,7 @@
 import axios from "axios";
 import fs from "fs-extra";
+import path from "path";
+import { spawn } from "child_process";
 import { VIDEOS_DIR } from "../../config/paths";
 import * as storageService from "../storageService";
 import type { Video } from "../storageService/types";
@@ -86,6 +88,50 @@ export function parseTotalBytes(
   }
   const len = Number(headers["content-length"]);
   return Number.isFinite(len) && len > 0 ? len : 0;
+}
+
+// mp4-family containers carry a `moov` index that torrent files frequently put
+// at the END of the file. Browsers tolerate that (Range-fetch the tail), but
+// external players (IINA/VLC/mpv) often buffer the whole file first -> "stuck
+// loading". A `-c copy` remux with +faststart moves the index to the front; it
+// is lossless and fast (no re-encode). mkv/webm stream fine and are skipped.
+const FASTSTART_EXTS = new Set([".mp4", ".mov", ".m4v"]);
+
+/**
+ * Remux an mp4-family file in place to faststart (moov at the front) so it
+ * streams instantly in external players. Best-effort: on any failure (ffmpeg
+ * missing, odd streams, etc.) the original file is kept untouched.
+ */
+async function ensureFaststart(finalName: string): Promise<void> {
+  const ext = path.extname(finalName).toLowerCase();
+  if (!FASTSTART_EXTS.has(ext)) {
+    return;
+  }
+  const finalPath = resolveSafePathInDirectories(finalName, [VIDEOS_DIR]);
+  const tmpName = `${finalName}.faststart${ext}`;
+  const tmpPath = resolveSafePathInDirectories(tmpName, [VIDEOS_DIR]);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const ff = spawn(
+        "ffmpeg",
+        ["-y", "-i", finalPath, "-map", "0", "-c", "copy", "-movflags", "+faststart", tmpPath],
+        { stdio: "ignore" }
+      );
+      ff.on("error", reject); // ffmpeg not installed / not spawnable
+      ff.on("close", (code) =>
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}`))
+      );
+    });
+    await fs.move(tmpPath, finalPath, { overwrite: true });
+    logger.info(`[TorrServer] faststart remux applied: /videos/${finalName}`);
+  } catch (error) {
+    await fs.remove(tmpPath).catch(() => undefined);
+    logger.warn(
+      `[TorrServer] faststart remux skipped (${
+        error instanceof Error ? error.message : String(error)
+      }): /videos/${finalName}`
+    );
+  }
 }
 
 /**
@@ -183,6 +229,8 @@ export async function downloadTorrentTask(
 
     const finalPath = resolveSafePathInDirectories(finalName, [VIDEOS_DIR]);
     await fs.move(partPath, finalPath, { overwrite: true });
+    // Make the finished file stream instantly in external players (IINA/VLC).
+    await ensureFaststart(finalName);
     storageService.updateVideo(videoId, {
       videoPath: `/videos/${finalName}`,
       videoFilename: finalName,
