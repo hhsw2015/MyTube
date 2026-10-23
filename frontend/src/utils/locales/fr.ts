@@ -583,6 +583,8 @@ export const fr = {
     "Êtes-vous sûr de vouloir supprimer le fichier de cookies ? Cela affectera votre capacité à télécharger des vidéos soumises à une limite d'âge ou réservées aux membres.",
   cookiesDeletedSuccess: "Cookies supprimés avec succès",
   cookiesDeleteFailed: "Échec de la suppression des cookies",
+  youtubeCookiesMayHaveExpired:
+    "YouTube a refusé le téléchargement (HTTP 403). Vos cookies YouTube ont peut-être expiré ; veuillez les téléverser à nouveau.",
 
 
   // Cloud Drive
@@ -1345,6 +1347,11 @@ export const fr = {
 
   moveThumbnailsToVideoFolderDescription:
     "Si activé, les fichiers de miniatures en taille complète seront déplacés dans le même dossier que le fichier vidéo. Si désactivé, ils seront déplacés dans le dossier d'images isolé. MyTube conserve aussi un petit cache interne d'aperçu sous `images-small/` qui reflète la structure des dossiers de miniatures; il peut être ignoré ou exclu des bibliothèques de serveur multimédia.",
+  uploadFilenameMode: "Noms des fichiers mis en ligne",
+  uploadFilenameModeOriginal: "Conserver le nom de fichier d'origine",
+  uploadFilenameModeGenerated: "Utiliser un nom de fichier généré",
+  uploadFilenameModeDescription:
+    "Lorsque cette option est activée, les vidéos mises en ligne conservent leur nom de fichier d'origine. Si un fichier portant ce nom existe déjà, un court identifiant est ajouté, par exemple \"My Video [3f9a2c1b].mp4\". S'applique uniquement aux nouvelles mises en ligne ; les fichiers existants ne sont pas renommés.",
   saveAuthorFilesToCollection:
     "Enregistrer les fichiers de l'auteur dans la collection",
   saveAuthorFilesToCollectionOn: "Activé",

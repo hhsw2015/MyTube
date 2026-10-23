@@ -18,6 +18,11 @@ export type AuthorOrganizationMode =
   | "root"
   | "author_folder_only"
   | "author_collection_linked";
+// How uploaded video files are named on disk. "generated" keeps the historical
+// <epoch-ms>-<hex>.<ext> names; "original" keeps the uploaded filename and adds
+// a short ID only on collision. Only new uploads are affected.
+export const UPLOAD_FILENAME_MODES = ["generated", "original"] as const;
+export type UploadFilenameMode = (typeof UPLOAD_FILENAME_MODES)[number];
 export const PREFERRED_VIDEO_CONTAINERS = [
   "auto",
   "mp4",
@@ -111,6 +116,7 @@ export interface Settings {
   moveThumbnailsToVideoFolder?: boolean;
   authorOrganizationMode?: AuthorOrganizationMode;
   saveAuthorFilesToCollection?: boolean;
+  uploadFilenameMode?: UploadFilenameMode;
   visitorPassword?: string;
   visitorPasswordMigratedAt?: number;
   visitorUserEnabled?: boolean;
@@ -214,6 +220,7 @@ export const defaultSettings: Settings = {
   showYoutubeSearch: true,
   showBilibiliSearch: false,
   authorOrganizationMode: "root",
+  uploadFilenameMode: "generated",
   preferredVideoContainer: "auto",
   audioFormat: "m4a",
   preferredVideoResolution: "auto",
@@ -250,6 +257,15 @@ export const defaultSettings: Settings = {
   liveTranslationTargetLanguage: "en",
   liveTranslationOriginalAudioWithSubtitles: false,
 };
+
+export function isUploadFilenameMode(
+  value: unknown
+): value is UploadFilenameMode {
+  return (
+    typeof value === "string" &&
+    UPLOAD_FILENAME_MODES.includes(value as UploadFilenameMode)
+  );
+}
 
 export function isAuthorOrganizationMode(
   value: unknown

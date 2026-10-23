@@ -547,6 +547,8 @@ export const zh = {
     "您确定要删除 cookies 文件吗？这将影响您下载有年龄限制或仅限会员视频的能力。",
   cookiesDeletedSuccess: "Cookies 删除成功",
   cookiesDeleteFailed: "删除 Cookies 失败",
+  youtubeCookiesMayHaveExpired:
+    "YouTube 拒绝了下载（HTTP 403）。YouTube Cookie 可能已失效，请重新上传。",
 
 
   // Cloud Drive
@@ -1255,6 +1257,11 @@ export const zh = {
   moveThumbnailsToVideoFolderOff: "在独立的图片文件夹中",
   moveThumbnailsToVideoFolderDescription:
     "启用后，完整尺寸封面文件将被移动到与视频文件相同的文件夹中。禁用后，它们将被移动到独立的图片文件夹中。MyTube 仍会在 `images-small/` 下保留用于界面预览的小图缓存，它会镜像封面目录结构，可忽略或从媒体库中排除。",
+  uploadFilenameMode: "上传文件名",
+  uploadFilenameModeOriginal: "保留原始文件名",
+  uploadFilenameModeGenerated: "使用自动生成的文件名",
+  uploadFilenameModeDescription:
+    "启用后，上传的视频将保留原始文件名。如果已存在同名文件，会追加一个短 ID，例如 \"我的视频 [3f9a2c1b].mp4\"。仅对新上传的视频生效，不会重命名已有文件。",
   saveAuthorFilesToCollection: "将作者文件保存到合集",
   saveAuthorFilesToCollectionOn: "按作者整理",
   saveAuthorFilesToCollectionOff: "保存到根文件夹",
