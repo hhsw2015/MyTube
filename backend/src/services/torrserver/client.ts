@@ -124,10 +124,13 @@ export async function addMagnet(
 }
 
 /**
- * Aggressive streaming/bandwidth settings pushed to TorrServer. Its settings DB
- * lives on tmpfs and is wiped on each sandbox recycle, so we re-apply them on
- * startup and on every add. Big RAM cache + high read-ahead + many connections
- * + a large public tracker list = max download bandwidth and smooth playback.
+ * Aggressive streaming/bandwidth settings pushed to TorrServer. We re-apply them
+ * on startup and on every add (idempotent) so a fresh/redeployed TorrServer gets
+ * them without manual steps. Big RAM cache + high read-ahead + many connections
+ * + a large public tracker list + IPv6 = max download bandwidth and smooth
+ * playback. NOTE: TorrServer's `set` REPLACES the whole BTSets object, so any
+ * non-default field we want kept must be listed here — otherwise it reverts to
+ * its zero value on the next apply (that is why EnableIPv6 is explicit).
  */
 // A curated set of reliable public trackers applied immediately (DefaultTrackers
 // is static, unlike TrackersListURL which TorrServer fetches asynchronously).
@@ -160,7 +163,10 @@ const STREAMING_SETTINGS = {
   DefaultTrackers: DEFAULT_TRACKERS,
   TorrentDisconnectTimeout: 120,
   UseDisk: false,
+  EnableIPv6: true, // connect IPv6-only peers (the host has an IPv6 address)
 } as const;
+// Kept in sync with sprite-deploy/deploy-mytube.sh, which pushes the same set at
+// deploy time so a standalone TorrServer is tuned before MyTube connects.
 
 /**
  * Push the aggressive settings to TorrServer. Best-effort: returns false (never
