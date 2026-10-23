@@ -33,8 +33,13 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
     // Get video URL with fallback logic
     const getVideoUrl = async (): Promise<string> => {
         // If we have a cloud storage URL, use it directly
+        // useCloudStorageUrl returns a RELATIVE path for local /videos files; an
+        // external player / copied link needs it absolute + with the API key.
+        // Cloud/signed URLs are already absolute (http) — pass them through.
         if (videoUrl) {
-            return videoUrl;
+            return isHttpUrl(videoUrl)
+                ? videoUrl
+                : withApiKey(`${window.location.origin}${videoUrl}`, apiKey);
         }
 
         // Torrent (stream proxy) and mount videos resolve to same-origin API

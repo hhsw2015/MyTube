@@ -53,9 +53,14 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
     const isLocked = video.autoDeleteLocked === 1;
 
     const getVideoUrl = async (): Promise<string> => {
-        // If we have a cloud storage URL, use it directly
+        // useCloudStorageUrl returns a RELATIVE path for local /videos files; for an
+        // external player / copied link it must be absolute AND carry the API key
+        // (IINA/VLC have no login session). Cloud/signed URLs are already absolute
+        // (http) — pass them through unchanged.
         if (videoUrl) {
-            return videoUrl;
+            return isHttpUrl(videoUrl)
+                ? videoUrl
+                : withApiKey(`${window.location.origin}${videoUrl}`, apiKey);
         }
 
         // Torrent/mount stream through auth-gated proxy endpoints keyed by id.
@@ -101,7 +106,9 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
     };
 
     const getSyncVideoUrl = (): string | null => {
-        if (videoUrl) return videoUrl;
+        if (videoUrl) return isHttpUrl(videoUrl)
+            ? videoUrl
+            : withApiKey(`${window.location.origin}${videoUrl}`, apiKey);
 
         const proxied = resolveProxyMediaUrl(video, window.location.origin, apiKey);
         if (proxied) return proxied;
