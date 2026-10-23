@@ -4,7 +4,7 @@ import { isNewVideo } from '../utils/videoCardUtils';
 import { useCloudStorageUrl } from './useCloudStorageUrl';
 import { useSettings } from './useSettings';
 import { useThumbnailCandidates } from './useThumbnailCandidates';
-import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl } from '../utils/localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl, withApiKey } from '../utils/localMediaPath';
 
 interface UseVideoCardMetadataProps {
     video: Video;
@@ -64,7 +64,9 @@ export const useVideoCardMetadata = ({ video }: UseVideoCardMetadataProps) => {
         if (video.videoPath) {
             if (isHttpUrl(video.videoPath)) return video.videoPath;
             const videoPath = video.videoPath.startsWith('/') ? video.videoPath : `/${video.videoPath}`;
-            return `${window.location.origin}${encodeLocalMediaPath(videoPath)}`;
+            // Local files are auth-gated too; embed the API key so copy-link /
+            // external-player URLs work outside the browser (no-op when disabled).
+            return withApiKey(`${window.location.origin}${encodeLocalMediaPath(videoPath)}`, apiKey);
         }
         return video.sourceUrl || '';
     };

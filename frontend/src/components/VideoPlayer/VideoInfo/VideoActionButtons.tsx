@@ -7,7 +7,7 @@ import { useVideo } from '../../../contexts/VideoContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useCloudStorageUrl } from '../../../hooks/useCloudStorageUrl';
 import { useSettings } from '../../../hooks/useSettings';
-import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl } from '../../../utils/localMediaPath';
+import { encodeLocalMediaPath, isHttpUrl, resolveProxyMediaUrl, withApiKey } from '../../../utils/localMediaPath';
 import { useShareVideo } from '../../../hooks/useShareVideo';
 import { Video } from '../../../types'; // Add imports
 import { getAvailablePlayers, getPlayerUrl } from '../../../utils/playerUtils'; // Import new utils
@@ -84,7 +84,10 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
             // Always use current origin for external players to ensure accessibility
             // The browser's same-origin policy means videos are served from the same origin
             // when accessed remotely, so window.location.origin is the correct base URL
-            return `${window.location.origin}${encodeLocalMediaPath(videoPath)}`;
+            // Local files are also auth-gated; embed the API key so the copied /
+            // external-player URL works outside the browser session (same as the
+            // torrent/mount branch above). No-op when the API key is disabled.
+            return withApiKey(`${window.location.origin}${encodeLocalMediaPath(videoPath)}`, apiKey);
         }
         return video.sourceUrl || '';
     };
@@ -106,7 +109,10 @@ const VideoActionButtons: React.FC<VideoActionButtonsProps> = ({
         if (video.videoPath && !video.videoPath.startsWith('cloud:')) {
             if (isHttpUrl(video.videoPath)) return video.videoPath;
             const videoPath = video.videoPath.startsWith('/') ? video.videoPath : `/${video.videoPath}`;
-            return `${window.location.origin}${encodeLocalMediaPath(videoPath)}`;
+            // Local files are also auth-gated; embed the API key so the copied /
+            // external-player URL works outside the browser session (same as the
+            // torrent/mount branch above). No-op when the API key is disabled.
+            return withApiKey(`${window.location.origin}${encodeLocalMediaPath(videoPath)}`, apiKey);
         }
 
         if (video.sourceUrl) return video.sourceUrl;
