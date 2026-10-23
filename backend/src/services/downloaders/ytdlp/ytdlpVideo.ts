@@ -29,6 +29,7 @@ import { resolveSupersededManagedPath } from "../supersededOutput";
 import { logger } from "../../../utils/logger";
 import { ProgressTracker } from "../../../utils/progressTracker";
 import { resolvePlayableMediaFilePath } from "../../../utils/videoFileResolver";
+import { ensureFaststartMp4 } from "../../../utils/faststart";
 import {
   executeYtDlpJson,
   executeYtDlpSpawn,
@@ -551,6 +552,11 @@ export async function downloadVideo(
     }
 
     logger.info("Video downloaded successfully");
+
+    // Faststart the finished mp4 so it streams instantly in external players
+    // (IINA/VLC/mpv) instead of buffering the whole file. Best-effort: no-op for
+    // webm/mkv/audio and already-faststart files, and never throws.
+    await ensureFaststartMp4(newVideoPathWithFormat);
 
     // Check if download was cancelled before processing thumbnails and subtitles
     try {
